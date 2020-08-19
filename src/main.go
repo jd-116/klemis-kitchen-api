@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"syscall"
 
-	"github.com/jd-116/klemis-kitchen-api/src/api"
+	"github.com/jd-116/klemis-kitchen-api/api"
 )
 
 // Gets the port from the environment
