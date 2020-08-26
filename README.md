@@ -43,4 +43,6 @@ The response should include something like this if it worked:
 > Host: localhost:8080
 > User-Agent: curl/7.71.1
 > Accept: */*
+...
+< HTTP/1.1 204 No Content
 ```
