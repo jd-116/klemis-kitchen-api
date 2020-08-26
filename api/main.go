@@ -5,29 +5,20 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 
-	"github.com/jd-116/klemis-kitchen-api/src/api"
+	"github.com/jd-116/klemis-kitchen-api/util"
 )
-
-// Gets the port from the environment
-func getPort() int {
-	port, exists := os.LookupEnv("SERVER_PORT")
-	if exists {
-		intPort, err := strconv.Atoi(port)
-		if err == nil {
-			return intPort
-		}
-	}
-
-	return 8080
-}
 
 // Starts the main API and waits for termination signals.
 // This function blocks.
 func main() {
-	port := getPort()
+	apiPort, err := util.GetIntEnv("server port", "SERVER_PORT")
+	if err != nil {
+		log.Println(err)
+		os.Exit(1)
+	}
+
 	serverCtx, cancel := context.WithCancel(context.Background())
 
 	done := make(chan os.Signal, 1)
@@ -39,6 +30,6 @@ func main() {
 		cancel()
 	}()
 
-	api.Serve(serverCtx, port)
+	ServeAPI(serverCtx, apiPort)
 	log.Println("exiting")
 }

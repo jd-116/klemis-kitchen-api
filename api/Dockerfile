@@ -11,7 +11,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 # Build in separate step
-COPY ./src/ ./
+COPY . ./
 RUN go build -o main .
 
 EXPOSE 8080

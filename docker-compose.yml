@@ -1,0 +1,8 @@
+version: '3.4'
+services:
+  api:
+    build:
+      context: ./api
+      network: host
+    ports:
+    - "8080:8080"

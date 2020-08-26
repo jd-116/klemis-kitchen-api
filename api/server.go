@@ -1,4 +1,4 @@
-package api
+package main
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 // Runs the main API server until it's cancelled for some reason,
 // in which case it attempts to gracefully shutdown.
 // This function blocks.
-func Serve(ctx context.Context, port int) {
+func ServeAPI(ctx context.Context, port int) {
 	router := mux.NewRouter().PathPrefix("/api/v1").Subrouter()
 	router.HandleFunc("/health", healthEndpoint).Methods("GET")
 
