@@ -1,0 +1,2 @@
+# Ignore the real `.env` file
+.env

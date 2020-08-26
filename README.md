@@ -15,7 +15,11 @@ On Linux, the [Docker Engine](https://docs.docker.com/engine/install/#server)
 needs to be installed separately before Docker Compose can be installed
 by following the instructions on their [Install page](https://docs.docker.com/compose/install/).
 
-Once installed, start up the application containers by running:
+Once installed, you'll need to configure the environment variables.
+To do so, copy `.env.example` in the repository root to `.env` and fill in the missing fields.
+You'll need an active MongoDB connection and credentials to run the API server.
+
+Finally, start up the application container by running:
 
 ```
 docker-compose up
