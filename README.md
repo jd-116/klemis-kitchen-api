@@ -26,3 +26,21 @@ docker-compose up
 ```
 
 The API should then be accessible at `http://localhost:8080`.
+
+### 🧪 Testing with health check route
+
+To test to make sure the API is running, open up a new terminal and run:
+
+```
+curl -v localhost:8080/api/v1/health
+```
+
+The response should include something like this if it worked:
+
+```
+* Connected to localhost (::1) port 8080 (#0)
+> GET /api/v1/health HTTP/1.1
+> Host: localhost:8080
+> User-Agent: curl/7.71.1
+> Accept: */*
+```
