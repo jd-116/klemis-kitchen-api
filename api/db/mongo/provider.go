@@ -11,57 +11,65 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 )
 
-// type Provider struct{}
-
 type Provider struct {
-	Data string
+	connectionUri string
+	databaseName  string
+	client        *mongo.Client
 }
 
-// func NewProvider() (*Provider, error) {
-// 	dbPort, err := util.GetIntEnv("MongoDB port", "MONGO_DB_PORT")
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	dbHost, err := util.GetEnv("MongoDB host", "MONGO_DB_HOST")
-// 	if err != nil {
-// 		log.Println(err)
-// 		return nil, err
-// 	}
-// }
-
-func DBConnect() {
-	dbhost, err := util.GetEnv("database host name", "MONGO_DB_HOST")
-	dbpwd, err := util.GetEnv("database host name", "MONGO_DB_PWD")
-	dbca, err := util.GetEnv("database host name", "MONGO_DB_CA")
-	uri := fmt.Sprintf("mongodb+srv://%s:%s@%s.qkdgq.mongodb.net/inventory?retryWrites=true&w=majority", dbhost, dbpwd, dbca)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
+// Creates a new provider and loads values in from the environment
+func NewProvider() (*Provider, error) {
+	dbHost, err := util.GetEnv("database host name", "MONGO_DB_HOST")
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
-	defer func() {
-		if err = client.Disconnect(ctx); err != nil {
-			panic(err)
-		}
-	}()
+	dbPwd, err := util.GetEnv("database password", "MONGO_DB_PWD")
+	if err != nil {
+		return nil, err
+	}
+
+	dbCluster, err := util.GetEnv("database cluster name ", "MONGO_DB_CLUSTER")
+	if err != nil {
+		return nil, err
+	}
+
+	dbName, err := util.GetEnv("database name ", "MONGO_DB_NAME")
+	if err != nil {
+		return nil, err
+	}
+
+	connectionUri := fmt.Sprintf("mongodb+srv://%s:%s@%s.qkdgq.mongodb.net/%s?retryWrites=true&w=majority",
+		dbHost, dbPwd, dbCluster, dbName)
+	return &Provider{
+		connectionUri: connectionUri,
+		databaseName:  dbName,
+		client:        nil,
+	}, nil
+}
+
+func (p *Provider) Connect(ctx context.Context) error {
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(p.connectionUri))
+	if err != nil {
+		return err
+	}
 
 	// Ping the primary
-	if err := client.Ping(ctx, readpref.Primary()); err != nil {
-		panic(err)
+	pingCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	if err := client.Ping(pingCtx, readpref.Primary()); err != nil {
+		return err
 	}
 
-	fmt.Println("Successfully connected and pinged.")
+	p.client = client
+	return nil
+}
 
-	// collection := client.Database("inventory").Collection("provider")
+func (p *Provider) Disconnect(ctx context.Context) error {
+	err := p.client.Disconnect(ctx)
+	if err != nil {
+		return err
+	}
 
-	// err = client.Disconnect(context.TODO())
-
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-	// fmt.Println("Connection to MongoDB closed.")
+	return nil
 }

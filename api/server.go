@@ -7,16 +7,47 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gorilla/mux"
+	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/middleware"
+	"github.com/go-chi/render"
+	"github.com/jd-116/klemis-kitchen-api/db"
+	"github.com/jd-116/klemis-kitchen-api/gadgets"
 )
+
+func Routes(database db.Provider) *chi.Mux {
+	// Approach from:
+	// https://itnext.io/structuring-a-production-grade-rest-api-in-golang-c0229b3feedc
+	// https://itnext.io/how-i-pass-around-shared-resources-databases-configuration-etc-within-golang-projects-b27af4d8e8a
+	router := chi.NewRouter()
+	router.Use(
+		render.SetContentType(render.ContentTypeJSON), // Set content-type headers to application/json
+		middleware.Logger,          // Log API request calls
+		middleware.Compress(5),     // Compress results, mostly gzipping assets and json
+		middleware.RedirectSlashes, // Redirect slashes to no slash URL versions
+		middleware.Recoverer,       // Recover from panics without crashing the server
+	)
+
+	// ==============================
+	// Add all routes to the API here
+	// ==============================
+	router.Route("/api/v1", func(r chi.Router) {
+		// Can be used for health checks
+		r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(204)
+		})
+
+		// Proof of concept routes
+		r.Mount("/gadgets", gadgets.Routes(database))
+	})
+
+	return router
+}
 
 // Runs the main API server until it's cancelled for some reason,
 // in which case it attempts to gracefully shutdown.
 // This function blocks.
-func ServeAPI(ctx context.Context, port int) {
-	router := mux.NewRouter().PathPrefix("/api/v1").Subrouter()
-	router.HandleFunc("/health", healthEndpoint).Methods("GET")
-
+func ServeAPI(ctx context.Context, port int, database db.Provider) {
+	router := Routes(database)
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", port),
 		Handler: router,
@@ -27,11 +58,10 @@ func ServeAPI(ctx context.Context, port int) {
 			log.Fatalf("listen: %s\n", err)
 		}
 	}()
-	// log.Printf("server started; serving on port %d\n", port)
-	log.Println(":)")
+	log.Printf("API server started; serving on port %d\n", port)
 
 	<-ctx.Done()
-	log.Print("server stopped")
+	log.Println("API server stopped")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer func() {
@@ -39,13 +69,7 @@ func ServeAPI(ctx context.Context, port int) {
 	}()
 
 	if err := server.Shutdown(ctx); err != nil {
-		log.Fatalf("server shutdown failed: %+v", err)
+		log.Fatalf("API server shutdown failed: %+v", err)
 	}
-	log.Print("server exited properly")
-}
-
-// Can be used for health checks
-func healthEndpoint(w http.ResponseWriter, r *http.Request) {
-	log.Println(":)")
-	w.WriteHeader(204)
+	log.Println("API server exited properly")
 }

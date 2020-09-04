@@ -2,6 +2,18 @@ FROM golang:1.15-alpine
 
 RUN apk add bash ca-certificates git gcc g++ libc-dev
 
+RUN apk update \
+    && apk upgrade \
+    && apk add --no-cache \
+    # Packages to install:
+    bash \
+    git \
+    gcc \
+    g++ \
+    libc-dev \
+    ca-certificates \
+    # Update certificates
+    && update-ca-certificates 2>/dev/null || true
 WORKDIR /opt
 ENV GO111MODULE=on
 
