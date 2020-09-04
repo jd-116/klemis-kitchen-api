@@ -2,9 +2,11 @@ package mongo
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
+	"github.com/jd-116/klemis-kitchen-api/types"
 	"github.com/jd-116/klemis-kitchen-api/util"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -72,4 +74,29 @@ func (p *Provider) Disconnect(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (p *Provider) GetGadget(id string) (*types.Gadget, error) {
+	// TODO implement
+	return nil, errors.New("TODO implement")
+}
+
+func (p *Provider) GetAllGadgets() ([]types.Gadget, error) {
+	// TODO implement
+	return nil, errors.New("TODO implement")
+}
+
+func (p *Provider) CreateGadget(gadget types.Gadget) error {
+	// TODO implement
+	return errors.New("TODO implement")
+}
+
+func (p *Provider) DeleteGadget(id string) error {
+	// TODO implement
+	return errors.New("TODO implement")
+}
+
+func (p *Provider) UpdateGadget(gadget types.Gadget) error {
+	// TODO implement
+	return errors.New("TODO implement")
 }

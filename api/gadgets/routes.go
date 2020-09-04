@@ -1,11 +1,14 @@
 package gadgets
 
 import (
-	"fmt"
+	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi"
 	"github.com/jd-116/klemis-kitchen-api/db"
+	"github.com/jd-116/klemis-kitchen-api/types"
+	"github.com/jd-116/klemis-kitchen-api/util"
 )
 
 func Routes(database db.Provider) *chi.Mux {
@@ -22,8 +25,23 @@ func Routes(database db.Provider) *chi.Mux {
 func GetAll(database db.Provider) http.HandlerFunc {
 	// Use a closure to inject the database provider
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
-		fmt.Fprintln(w, "here are all of them :)")
+		gadgets, err := database.GetAllGadgets()
+		if err != nil {
+			util.Error(w, err)
+			return
+		}
+
+		// Return the list in a JSON object
+		jsonResponse, err := json.Marshal(map[string]interface{}{
+			"gadgets": gadgets,
+		})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		w.Write(jsonResponse)
 	}
 }
 
@@ -31,16 +49,55 @@ func GetAll(database db.Provider) http.HandlerFunc {
 func GetSingle(database db.Provider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
-		w.WriteHeader(200)
-		fmt.Fprintf(w, "Here is the one with id '%s'\n", id)
+		if id == "" {
+			util.ErrorWithCode(w, errors.New("the URL parameter is empty"),
+				http.StatusBadRequest)
+			return
+		}
+
+		gadget, err := database.GetGadget(id)
+		if err != nil {
+			util.Error(w, err)
+			return
+		}
+
+		// Return the single gadget as the top-level JSON
+		jsonResponse, err := json.Marshal(gadget)
+		if err != nil {
+			util.ErrorWithCode(w, err, http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		w.Write(jsonResponse)
 	}
 }
 
 // Creates a new gadget in the database
 func Create(database db.Provider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
-		fmt.Fprintln(w, "ok im creating it")
+		var gadget types.Gadget
+		err := json.NewDecoder(r.Body).Decode(&gadget)
+		if err != nil {
+			util.Error(w, err)
+			return
+		}
+
+		err = database.CreateGadget(gadget)
+		if err != nil {
+			util.Error(w, err)
+			return
+		}
+
+		// Return the single gadget as the top-level JSON
+		jsonResponse, err := json.Marshal(gadget)
+		if err != nil {
+			util.ErrorWithCode(w, err, http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusCreated)
+		w.Write(jsonResponse)
 	}
 }
 
@@ -48,15 +105,46 @@ func Create(database db.Provider) http.HandlerFunc {
 func Delete(database db.Provider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
-		w.WriteHeader(200)
-		fmt.Fprintf(w, "Ok I'm deleting the one with id '%s'\n", id)
+		if id == "" {
+			util.ErrorWithCode(w, errors.New("the URL parameter is empty"),
+				http.StatusBadRequest)
+			return
+		}
+
+		err := database.DeleteGadget(id)
+		if err != nil {
+			util.Error(w, err)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
 	}
 }
 
 // Updates a gadget in the database
 func Update(database db.Provider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
-		fmt.Fprintln(w, "ok im deleting it")
+		var gadget types.Gadget
+		err := json.NewDecoder(r.Body).Decode(&gadget)
+		if err != nil {
+			util.Error(w, err)
+			return
+		}
+
+		err = database.UpdateGadget(gadget)
+		if err != nil {
+			util.Error(w, err)
+			return
+		}
+
+		// Return the single gadget as the top-level JSON
+		jsonResponse, err := json.Marshal(gadget)
+		if err != nil {
+			util.ErrorWithCode(w, err, http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		w.Write(jsonResponse)
 	}
 }
