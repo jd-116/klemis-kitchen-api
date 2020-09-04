@@ -7,12 +7,14 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/jd-116/klemis-kitchen-api/db/mongo"
 	"github.com/jd-116/klemis-kitchen-api/util"
 )
 
 // Starts the main API and waits for termination signals.
 // This function blocks.
 func main() {
+
 	apiPort, err := util.GetIntEnv("server port", "SERVER_PORT")
 	if err != nil {
 		log.Println(err)
@@ -30,6 +32,9 @@ func main() {
 		cancel()
 	}()
 
+	mongo.DBConnect()
+
 	ServeAPI(serverCtx, apiPort)
 	log.Println("exiting")
+
 }

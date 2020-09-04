@@ -27,7 +27,8 @@ func ServeAPI(ctx context.Context, port int) {
 			log.Fatalf("listen: %s\n", err)
 		}
 	}()
-	log.Printf("server started; serving on port %d\n", port)
+	// log.Printf("server started; serving on port %d\n", port)
+	log.Println(":)")
 
 	<-ctx.Done()
 	log.Print("server stopped")
@@ -45,5 +46,6 @@ func ServeAPI(ctx context.Context, port int) {
 
 // Can be used for health checks
 func healthEndpoint(w http.ResponseWriter, r *http.Request) {
+	log.Println(":)")
 	w.WriteHeader(204)
 }

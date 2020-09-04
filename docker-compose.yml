@@ -10,3 +10,5 @@ services:
       - SERVER_PORT=8080
       - MONGO_DB_PORT=${MONGO_DB_PORT}
       - MONGO_DB_HOST=${MONGO_DB_HOST}
+      - MONGO_DB_PWD=${MONGO_DB_PWD}
+      - MONGO_DB_CA=${MONGO_DB_CA}
