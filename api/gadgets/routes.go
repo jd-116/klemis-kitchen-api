@@ -25,7 +25,7 @@ func Routes(database db.Provider) *chi.Mux {
 func GetAll(database db.Provider) http.HandlerFunc {
 	// Use a closure to inject the database provider
 	return func(w http.ResponseWriter, r *http.Request) {
-		gadgets, err := database.GetAllGadgets()
+		gadgets, err := database.GetAllGadgets(r.Context())
 		if err != nil {
 			util.Error(w, err)
 			return
@@ -42,6 +42,7 @@ func GetAll(database db.Provider) http.HandlerFunc {
 
 		w.WriteHeader(http.StatusOK)
 		w.Write(jsonResponse)
+		w.Header().Set("Content-Type", "application/json")
 	}
 }
 
@@ -55,7 +56,7 @@ func GetSingle(database db.Provider) http.HandlerFunc {
 			return
 		}
 
-		gadget, err := database.GetGadget(id)
+		gadget, err := database.GetGadget(r.Context(), id)
 		if err != nil {
 			util.Error(w, err)
 			return
@@ -70,6 +71,7 @@ func GetSingle(database db.Provider) http.HandlerFunc {
 
 		w.WriteHeader(http.StatusOK)
 		w.Write(jsonResponse)
+		w.Header().Set("Content-Type", "application/json")
 	}
 }
 
@@ -83,7 +85,7 @@ func Create(database db.Provider) http.HandlerFunc {
 			return
 		}
 
-		err = database.CreateGadget(gadget)
+		err = database.CreateGadget(r.Context(), gadget)
 		if err != nil {
 			util.Error(w, err)
 			return
@@ -98,6 +100,7 @@ func Create(database db.Provider) http.HandlerFunc {
 
 		w.WriteHeader(http.StatusCreated)
 		w.Write(jsonResponse)
+		w.Header().Set("Content-Type", "application/json")
 	}
 }
 
@@ -111,7 +114,7 @@ func Delete(database db.Provider) http.HandlerFunc {
 			return
 		}
 
-		err := database.DeleteGadget(id)
+		err := database.DeleteGadget(r.Context(), id)
 		if err != nil {
 			util.Error(w, err)
 			return
@@ -124,21 +127,28 @@ func Delete(database db.Provider) http.HandlerFunc {
 // Updates a gadget in the database
 func Update(database db.Provider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var gadget types.Gadget
-		err := json.NewDecoder(r.Body).Decode(&gadget)
+		id := chi.URLParam(r, "id")
+		if id == "" {
+			util.ErrorWithCode(w, errors.New("the URL parameter is empty"),
+				http.StatusBadRequest)
+			return
+		}
+
+		partial := make(map[string]interface{})
+		err := json.NewDecoder(r.Body).Decode(&partial)
 		if err != nil {
 			util.Error(w, err)
 			return
 		}
 
-		err = database.UpdateGadget(gadget)
+		updated, err := database.UpdateGadget(r.Context(), id, partial)
 		if err != nil {
 			util.Error(w, err)
 			return
 		}
 
-		// Return the single gadget as the top-level JSON
-		jsonResponse, err := json.Marshal(gadget)
+		// Return the updated gadget as the top-level JSON
+		jsonResponse, err := json.Marshal(updated)
 		if err != nil {
 			util.ErrorWithCode(w, err, http.StatusInternalServerError)
 			return
@@ -146,5 +156,6 @@ func Update(database db.Provider) http.HandlerFunc {
 
 		w.WriteHeader(http.StatusOK)
 		w.Write(jsonResponse)
+		w.Header().Set("Content-Type", "application/json")
 	}
 }

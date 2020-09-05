@@ -5,12 +5,20 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/jd-116/klemis-kitchen-api/db"
 	"github.com/jd-116/klemis-kitchen-api/types"
 )
 
 // Resolves a status code from an error
 func ResponseCodeFromError(err error) int {
-	return http.StatusInternalServerError
+	switch err.(type) {
+	case *db.DuplicateIDError:
+		return http.StatusBadRequest
+	case *db.NotFoundError:
+		return http.StatusNotFound
+	default:
+		return http.StatusInternalServerError
+	}
 }
 
 // Creates a standardized error response

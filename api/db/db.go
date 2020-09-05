@@ -16,9 +16,9 @@ type Provider interface {
 
 // Provides CRUD operations for type.Gadget structs
 type GadgetProvider interface {
-	GetGadget(id string) (*types.Gadget, error)
-	GetAllGadgets() ([]types.Gadget, error)
-	CreateGadget(gadget types.Gadget) error
-	DeleteGadget(id string) error
-	UpdateGadget(gadget types.Gadget) error
+	GetGadget(ctx context.Context, id string) (*types.Gadget, error)
+	GetAllGadgets(ctx context.Context) ([]types.Gadget, error)
+	CreateGadget(ctx context.Context, gadget types.Gadget) error
+	DeleteGadget(ctx context.Context, id string) error
+	UpdateGadget(ctx context.Context, id string, update map[string]interface{}) (*types.Gadget, error)
 }
