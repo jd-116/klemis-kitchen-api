@@ -33,16 +33,16 @@ func GetAll(database db.Provider) http.HandlerFunc {
 
 		// Return the list in a JSON object
 		jsonResponse, err := json.Marshal(map[string]interface{}{
-			"gadgets": gadgets,
+			"announcements": gadgets,
 		})
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write(jsonResponse)
-		w.Header().Set("Content-Type", "application/json")
 	}
 }
 
@@ -69,9 +69,9 @@ func GetSingle(database db.Provider) http.HandlerFunc {
 			return
 		}
 
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write(jsonResponse)
-		w.Header().Set("Content-Type", "application/json")
 	}
 }
 
@@ -98,9 +98,9 @@ func Create(database db.Provider) http.HandlerFunc {
 			return
 		}
 
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 		w.Write(jsonResponse)
-		w.Header().Set("Content-Type", "application/json")
 	}
 }
 
@@ -120,7 +120,7 @@ func Delete(database db.Provider) http.HandlerFunc {
 			return
 		}
 
-		w.WriteHeader(http.StatusOK)
+		w.WriteHeader(http.StatusNoContent)
 	}
 }
 
@@ -154,8 +154,8 @@ func Update(database db.Provider) http.HandlerFunc {
 			return
 		}
 
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write(jsonResponse)
-		w.Header().Set("Content-Type", "application/json")
 	}
 }

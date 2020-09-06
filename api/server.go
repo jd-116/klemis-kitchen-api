@@ -37,7 +37,7 @@ func Routes(database db.Provider) *chi.Mux {
 		})
 
 		// Proof of concept routes
-		r.Mount("/gadgets", gadgets.Routes(database))
+		r.Mount("/announcements", gadgets.Routes(database))
 	})
 
 	return router
