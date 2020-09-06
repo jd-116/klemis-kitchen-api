@@ -11,7 +11,7 @@ import (
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/render"
 	"github.com/jd-116/klemis-kitchen-api/db"
-	"github.com/jd-116/klemis-kitchen-api/gadgets"
+	"github.com/jd-116/klemis-kitchen-api/announcements"
 )
 
 func Routes(database db.Provider) *chi.Mux {
@@ -37,7 +37,7 @@ func Routes(database db.Provider) *chi.Mux {
 		})
 
 		// Proof of concept routes
-		r.Mount("/announcements", gadgets.Routes(database))
+		r.Mount("/announcements", announcements.Routes(database))
 	})
 
 	return router

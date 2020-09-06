@@ -1,6 +1,6 @@
 package types
 
-type Gadget struct {
+type Announcement struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
 	Timestamp string `json:"timestamp"`

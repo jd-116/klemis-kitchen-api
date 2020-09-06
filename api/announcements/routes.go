@@ -1,4 +1,4 @@
-package gadgets
+package announcements
 
 import (
 	"encoding/json"
@@ -21,11 +21,11 @@ func Routes(database db.Provider) *chi.Mux {
 	return router
 }
 
-// Gets all gadgets from the database
+// Gets all announcements from the database
 func GetAll(database db.Provider) http.HandlerFunc {
 	// Use a closure to inject the database provider
 	return func(w http.ResponseWriter, r *http.Request) {
-		gadgets, err := database.GetAllGadgets(r.Context())
+		announcements, err := database.GetAllAnnouncements(r.Context())
 		if err != nil {
 			util.Error(w, err)
 			return
@@ -33,7 +33,7 @@ func GetAll(database db.Provider) http.HandlerFunc {
 
 		// Return the list in a JSON object
 		jsonResponse, err := json.Marshal(map[string]interface{}{
-			"announcements": gadgets,
+			"announcements": announcements,
 		})
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -46,7 +46,7 @@ func GetAll(database db.Provider) http.HandlerFunc {
 	}
 }
 
-// Gets a single gadget from the database by its ID
+// Gets a single announcement from the database by its ID
 func GetSingle(database db.Provider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
@@ -56,14 +56,14 @@ func GetSingle(database db.Provider) http.HandlerFunc {
 			return
 		}
 
-		gadget, err := database.GetGadget(r.Context(), id)
+		announcement, err := database.GetAnnouncement(r.Context(), id)
 		if err != nil {
 			util.Error(w, err)
 			return
 		}
 
-		// Return the single gadget as the top-level JSON
-		jsonResponse, err := json.Marshal(gadget)
+		// Return the single announcement as the top-level JSON
+		jsonResponse, err := json.Marshal(announcement)
 		if err != nil {
 			util.ErrorWithCode(w, err, http.StatusInternalServerError)
 			return
@@ -75,24 +75,24 @@ func GetSingle(database db.Provider) http.HandlerFunc {
 	}
 }
 
-// Creates a new gadget in the database
+// Creates a new announcement in the database
 func Create(database db.Provider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var gadget types.Gadget
-		err := json.NewDecoder(r.Body).Decode(&gadget)
+		var announcement types.Announcement
+		err := json.NewDecoder(r.Body).Decode(&announcement)
 		if err != nil {
 			util.Error(w, err)
 			return
 		}
 
-		err = database.CreateGadget(r.Context(), gadget)
+		err = database.CreateAnnouncement(r.Context(), announcement)
 		if err != nil {
 			util.Error(w, err)
 			return
 		}
 
-		// Return the single gadget as the top-level JSON
-		jsonResponse, err := json.Marshal(gadget)
+		// Return the single announcement as the top-level JSON
+		jsonResponse, err := json.Marshal(announcement)
 		if err != nil {
 			util.ErrorWithCode(w, err, http.StatusInternalServerError)
 			return
@@ -104,7 +104,7 @@ func Create(database db.Provider) http.HandlerFunc {
 	}
 }
 
-// Deletes a gadget in the database
+// Deletes a announcement in the database
 func Delete(database db.Provider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
@@ -114,7 +114,7 @@ func Delete(database db.Provider) http.HandlerFunc {
 			return
 		}
 
-		err := database.DeleteGadget(r.Context(), id)
+		err := database.DeleteAnnouncement(r.Context(), id)
 		if err != nil {
 			util.Error(w, err)
 			return
@@ -124,7 +124,7 @@ func Delete(database db.Provider) http.HandlerFunc {
 	}
 }
 
-// Updates a gadget in the database
+// Updates a announcement in the database
 func Update(database db.Provider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
@@ -141,13 +141,13 @@ func Update(database db.Provider) http.HandlerFunc {
 			return
 		}
 
-		updated, err := database.UpdateGadget(r.Context(), id, partial)
+		updated, err := database.UpdateAnnouncement(r.Context(), id, partial)
 		if err != nil {
 			util.Error(w, err)
 			return
 		}
 
-		// Return the updated gadget as the top-level JSON
+		// Return the updated announcement as the top-level JSON
 		jsonResponse, err := json.Marshal(updated)
 		if err != nil {
 			util.ErrorWithCode(w, err, http.StatusInternalServerError)
