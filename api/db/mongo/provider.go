@@ -95,7 +95,7 @@ func (p *Provider) Disconnect(ctx context.Context) error {
 func (p *Provider) initialize(ctx context.Context) error {
 	log.Println("initializing the MongoDB database")
 
-	_, err := p.gadgets().Indexes().CreateOne(ctx, mongo.IndexModel{
+	_, err := p.announcements().Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys:    bson.M{"id": 1},
 		Options: options.Index().SetUnique(true),
 	})
@@ -106,54 +106,54 @@ func (p *Provider) initialize(ctx context.Context) error {
 	return nil
 }
 
-func (p *Provider) gadgets() *mongo.Collection {
-	return p.client.Database(p.databaseName).Collection("gadgets")
+func (p *Provider) announcements() *mongo.Collection {
+	return p.client.Database(p.databaseName).Collection("announcements")
 }
 
-func (p *Provider) GetGadget(ctx context.Context, id string) (*types.Gadget, error) {
-	collection := p.gadgets()
+func (p *Provider) GetAnnouncement(ctx context.Context, id string) (*types.Announcement, error) {
+	collection := p.announcements()
 	result := collection.FindOne(ctx, bson.D{{"id", id}})
 	if result.Err() == mongo.ErrNoDocuments {
 		return nil, db.NewNotFoundError(id)
 	}
 
-	var gadget types.Gadget
-	err := result.Decode(&gadget)
+	var announcement types.Announcement
+	err := result.Decode(&announcement)
 	if err != nil {
 		return nil, err
 	}
 
-	return &gadget, nil
+	return &announcement, nil
 }
 
-func (p *Provider) GetAllGadgets(ctx context.Context) ([]types.Gadget, error) {
-	collection := p.gadgets()
+func (p *Provider) GetAllAnnouncements(ctx context.Context) ([]types.Announcement, error) {
+	collection := p.announcements()
 	cursor, err := collection.Find(ctx, bson.D{})
 	if err != nil {
 		return nil, err
 	}
 
-	var gadgets []types.Gadget
-	err = cursor.All(ctx, &gadgets)
+	var announcements []types.Announcement
+	err = cursor.All(ctx, &announcements)
 	if err != nil {
 		return nil, err
 	}
 
 	// Return non-nil slice so JSON serialization is nice
-	if gadgets == nil {
-		return []types.Gadget{}, nil
+	if announcements == nil {
+		return []types.Announcement{}, nil
 	}
 
-	return gadgets, nil
+	return announcements, nil
 }
 
-func (p *Provider) CreateGadget(ctx context.Context, gadget types.Gadget) error {
-	collection := p.gadgets()
-	_, err := collection.InsertOne(ctx, gadget)
+func (p *Provider) CreateAnnouncement(ctx context.Context, announcement types.Announcement) error {
+	collection := p.announcements()
+	_, err := collection.InsertOne(ctx, announcement)
 	if err != nil {
-		// Handle known cases (such as when the gadget was duplicate)
+		// Handle known cases (such as when the announcement was duplicate)
 		if writeException, ok := err.(mongo.WriteException); ok && isDuplicate(writeException) {
-			return db.NewDuplicateIDError(gadget.ID)
+			return db.NewDuplicateIDError(announcement.ID)
 		}
 
 		return err
@@ -174,8 +174,8 @@ func isDuplicate(writeException mongo.WriteException) bool {
 	return false
 }
 
-func (p *Provider) DeleteGadget(ctx context.Context, id string) error {
-	collection := p.gadgets()
+func (p *Provider) DeleteAnnouncement(ctx context.Context, id string) error {
+	collection := p.announcements()
 	result, err := collection.DeleteOne(ctx, bson.D{{"id", id}})
 	if err != nil {
 		return err
@@ -188,23 +188,23 @@ func (p *Provider) DeleteGadget(ctx context.Context, id string) error {
 	return nil
 }
 
-func (p *Provider) UpdateGadget(ctx context.Context, id string, update map[string]interface{}) (*types.Gadget, error) {
+func (p *Provider) UpdateAnnouncement(ctx context.Context, id string, update map[string]interface{}) (*types.Announcement, error) {
 	// Construct the patch query from the map
 	updateDocument := bson.D{}
 	for key, value := range update {
 		updateDocument = append(updateDocument, bson.E{key, value})
 	}
 
-	collection := p.gadgets()
+	collection := p.announcements()
 	filter := bson.D{{"id", id}}
 	updateQuery := bson.D{{"$set", updateDocument}}
-	var updatedGadget types.Gadget
-	err := collection.FindOneAndUpdate(ctx, filter, updateQuery).Decode(&updatedGadget)
+	var updatedAnnouncement types.Announcement
+	err := collection.FindOneAndUpdate(ctx, filter, updateQuery).Decode(&updatedAnnouncement)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return nil, db.NewNotFoundError(id)
 		}
 	}
 
-	return &updatedGadget, nil
+	return &updatedAnnouncement, nil
 }

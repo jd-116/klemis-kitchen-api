@@ -11,14 +11,14 @@ type Provider interface {
 	Connect(ctx context.Context) error
 	Disconnect(ctx context.Context) error
 
-	GadgetProvider
+	AnnouncementProvider
 }
 
-// Provides CRUD operations for type.Gadget structs
-type GadgetProvider interface {
-	GetGadget(ctx context.Context, id string) (*types.Gadget, error)
-	GetAllGadgets(ctx context.Context) ([]types.Gadget, error)
-	CreateGadget(ctx context.Context, gadget types.Gadget) error
-	DeleteGadget(ctx context.Context, id string) error
-	UpdateGadget(ctx context.Context, id string, update map[string]interface{}) (*types.Gadget, error)
+// Provides CRUD operations for type.Announcement structs
+type AnnouncementProvider interface {
+	GetAnnouncement(ctx context.Context, id string) (*types.Announcement, error)
+	GetAllAnnouncements(ctx context.Context) ([]types.Announcement, error)
+	CreateAnnouncement(ctx context.Context, announcement types.Announcement) error
+	DeleteAnnouncement(ctx context.Context, id string) error
+	UpdateAnnouncement(ctx context.Context, id string, update map[string]interface{}) (*types.Announcement, error)
 }
