@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jd-116/klemis-kitchen-api/db/mongo"
+	"github.com/jd-116/klemis-kitchen-api/items/transact"
 	"github.com/jd-116/klemis-kitchen-api/util"
 )
 
@@ -17,8 +18,7 @@ import (
 func main() {
 	apiPort, err := util.GetIntEnv("server port", "SERVER_PORT")
 	if err != nil {
-		log.Println(err)
-		os.Exit(1)
+		log.Fatal(err)
 	}
 
 	serverCtx, cancel := context.WithCancel(context.Background())
@@ -32,20 +32,34 @@ func main() {
 		cancel()
 	}()
 
+	// Initialize the Transact scraper & start the goroutines to scrape
+	itemProvider, err := transact.NewProvider()
+	log.Println("initializing Transact API connector")
+	if err != nil {
+		log.Fatal(err)
+	}
+	connectCtx, connectCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer connectCancel()
+	err = itemProvider.Connect(connectCtx)
+	if err != nil {
+		log.Println("could not authenticate with the Transact API")
+		log.Fatal(err)
+	} else {
+		log.Printf("successfully authenticated with the Transact API version %s\n", itemProvider.Scraper.ClientVersion)
+	}
+
 	// Initialize the DB handler & connect to the MongoDB database
 	dbProvider, err := mongo.NewProvider()
 	log.Println("initializing MongoDB database provider")
 	if err != nil {
-		log.Println(err)
-		os.Exit(1)
+		log.Fatal(err)
 	}
-	connectCtx, connectCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	connectCtx, connectCancel = context.WithTimeout(context.Background(), 10*time.Second)
 	defer connectCancel()
 	err = dbProvider.Connect(connectCtx)
 	if err != nil {
 		log.Println("could not disconnect to the database")
-		log.Println(err)
-		os.Exit(1)
+		log.Fatal(err)
 	} else {
 		log.Println("successfully connected to and pinged the database")
 	}
@@ -61,7 +75,17 @@ func main() {
 		} else {
 			log.Println("disconnected from the database")
 		}
+
+		disconnectItemsCtx, disconnectItemsCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer disconnectItemsCancel()
+		err = itemProvider.Disconnect(disconnectItemsCtx)
+		if err != nil {
+			log.Println("could not disconnect from the Transact API")
+			log.Println(err)
+		} else {
+			log.Println("disconnected from the Transact API")
+		}
 	}()
 
-	ServeAPI(serverCtx, apiPort, dbProvider)
+	ServeAPI(serverCtx, apiPort, dbProvider, itemProvider)
 }

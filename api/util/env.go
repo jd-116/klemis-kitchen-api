@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 )
 
 // Gets an integer value from the environment and parses it
@@ -20,6 +21,22 @@ func GetIntEnv(name string, varName string) (int, error) {
 	}
 
 	return asInt, nil
+}
+
+// Gets a duration value from the environment and parses it
+func GetDurationEnv(name string, varName string) (time.Duration, error) {
+	value, err := GetEnv(name, varName)
+	if err != nil {
+		return 0, err
+	}
+
+	asDuration, err := time.ParseDuration(value)
+	if err != nil {
+		return 0, fmt.Errorf("Environment variable value '%s' invalid for the %s ('%s')",
+			value, name, varName)
+	}
+
+	return asDuration, nil
 }
 
 // Gets a string value from the environment and parses it

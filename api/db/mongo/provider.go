@@ -6,14 +6,14 @@ import (
 	"log"
 	"time"
 
-	"github.com/jd-116/klemis-kitchen-api/db"
-	"github.com/jd-116/klemis-kitchen-api/types"
-	"github.com/jd-116/klemis-kitchen-api/util"
-
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
+
+	"github.com/jd-116/klemis-kitchen-api/db"
+	"github.com/jd-116/klemis-kitchen-api/types"
+	"github.com/jd-116/klemis-kitchen-api/util"
 )
 
 const (
