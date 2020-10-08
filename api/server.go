@@ -14,6 +14,7 @@ import (
 	"github.com/jd-116/klemis-kitchen-api/announcements"
 	"github.com/jd-116/klemis-kitchen-api/db"
 	"github.com/jd-116/klemis-kitchen-api/items"
+	"github.com/jd-116/klemis-kitchen-api/products"
 )
 
 func Routes(database db.Provider) *chi.Mux {
@@ -40,6 +41,7 @@ func Routes(database db.Provider) *chi.Mux {
 
 		// Proof of concept routes
 		r.Mount("/announcements", announcements.Routes(database))
+		r.Mount("/products", products.Routes(database))
 	})
 
 	return router

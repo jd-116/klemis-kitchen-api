@@ -110,6 +110,10 @@ func (p *Provider) announcements() *mongo.Collection {
 	return p.client.Database(p.databaseName).Collection("announcements")
 }
 
+func (p *Provider) products() *mongo.Collection {
+	return p.client.Database(p.databaseName).Collection("products")
+}
+
 func (p *Provider) GetAnnouncement(ctx context.Context, id string) (*types.Announcement, error) {
 	collection := p.announcements()
 	result := collection.FindOne(ctx, bson.D{{"id", id}})
@@ -124,6 +128,22 @@ func (p *Provider) GetAnnouncement(ctx context.Context, id string) (*types.Annou
 	}
 
 	return &announcement, nil
+}
+
+func (p *Provider) GetProduct(ctx context.Context, id string) (*types.Product, error) {
+	collection := p.products()
+	result := collection.FindOne(ctx, bson.D{{"id", id}})
+	if result.Err() == mongo.ErrNoDocuments {
+		return nil, db.NewNotFoundError(id)
+	}
+
+	var product types.Product
+	err := result.Decode(&product)
+	if err != nil {
+		return nil, err
+	}
+
+	return &product, nil
 }
 
 func (p *Provider) GetAllAnnouncements(ctx context.Context) ([]types.Announcement, error) {
@@ -147,6 +167,27 @@ func (p *Provider) GetAllAnnouncements(ctx context.Context) ([]types.Announcemen
 	return announcements, nil
 }
 
+func (p *Provider) GetAllProducts(ctx context.Context) ([]types.Product, error) {
+	collection := p.products()
+	cursor, err := collection.Find(ctx, bson.D{})
+	if err != nil {
+		return nil, err
+	}
+
+	var products []types.Product
+	err = cursor.All(ctx, &products)
+	if err != nil {
+		return nil, err
+	}
+
+	// Return non-nil slice so JSON serialization is nice
+	if products == nil {
+		return []types.Product{}, nil
+	}
+
+	return products, nil
+}
+
 func (p *Provider) CreateAnnouncement(ctx context.Context, announcement types.Announcement) error {
 	collection := p.announcements()
 	_, err := collection.InsertOne(ctx, announcement)
@@ -154,6 +195,21 @@ func (p *Provider) CreateAnnouncement(ctx context.Context, announcement types.An
 		// Handle known cases (such as when the announcement was duplicate)
 		if writeException, ok := err.(mongo.WriteException); ok && isDuplicate(writeException) {
 			return db.NewDuplicateIDError(announcement.ID)
+		}
+
+		return err
+	}
+
+	return nil
+}
+
+func (p *Provider) CreateProduct(ctx context.Context, product types.Product) error {
+	collection := p.products()
+	_, err := collection.InsertOne(ctx, product)
+	if err != nil {
+		// Handle known cases (such as when the product was duplicate)
+		if writeException, ok := err.(mongo.WriteException); ok && isDuplicate(writeException) {
+			return db.NewDuplicateIDError(product.ID)
 		}
 
 		return err
@@ -188,6 +244,20 @@ func (p *Provider) DeleteAnnouncement(ctx context.Context, id string) error {
 	return nil
 }
 
+func (p *Provider) DeleteProduct(ctx context.Context, id string) error {
+	collection := p.products()
+	result, err := collection.DeleteOne(ctx, bson.D{{"id", id}})
+	if err != nil {
+		return err
+	}
+
+	if result.DeletedCount == 0 {
+		return db.NewNotFoundError(id)
+	}
+
+	return nil
+}
+
 func (p *Provider) UpdateAnnouncement(ctx context.Context, id string, update map[string]interface{}) (*types.Announcement, error) {
 	// Construct the patch query from the map
 	updateDocument := bson.D{}
@@ -207,4 +277,25 @@ func (p *Provider) UpdateAnnouncement(ctx context.Context, id string, update map
 	}
 
 	return &updatedAnnouncement, nil
+}
+
+func (p *Provider) UpdateProduct(ctx context.Context, id string, update map[string]interface{}) (*types.Product, error) {
+	// Construct the patch query from the map
+	updateDocument := bson.D{}
+	for key, value := range update {
+		updateDocument = append(updateDocument, bson.E{key, value})
+	}
+
+	collection := p.products()
+	filter := bson.D{{"id", id}}
+	updateQuery := bson.D{{"$set", updateDocument}}
+	var updatedProduct types.Product
+	err := collection.FindOneAndUpdate(ctx, filter, updateQuery).Decode(&updatedProduct)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, db.NewNotFoundError(id)
+		}
+	}
+
+	return &updatedProduct, nil
 }
