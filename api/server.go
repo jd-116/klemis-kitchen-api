@@ -11,10 +11,10 @@ import (
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/render"
 
-	"github.com/jd-116/klemis-kitchen-api/announcements"
+	"github.com/jd-116/klemis-kitchen-api/api/announcements"
+	"github.com/jd-116/klemis-kitchen-api/api/products"
 	"github.com/jd-116/klemis-kitchen-api/db"
 	"github.com/jd-116/klemis-kitchen-api/items"
-	"github.com/jd-116/klemis-kitchen-api/products"
 )
 
 func Routes(database db.Provider) *chi.Mux {
