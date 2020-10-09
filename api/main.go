@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/jd-116/klemis-kitchen-api/db/mongo"
-	"github.com/jd-116/klemis-kitchen-api/items/transact"
+	"github.com/jd-116/klemis-kitchen-api/products/transact"
 	"github.com/jd-116/klemis-kitchen-api/util"
 )
 
