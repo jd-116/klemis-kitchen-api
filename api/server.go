@@ -14,7 +14,7 @@ import (
 	"github.com/jd-116/klemis-kitchen-api/api/announcements"
 	"github.com/jd-116/klemis-kitchen-api/api/products"
 	"github.com/jd-116/klemis-kitchen-api/db"
-	"github.com/jd-116/klemis-kitchen-api/items"
+	"github.com/jd-116/klemis-kitchen-api/products"
 )
 
 func Routes(database db.Provider) *chi.Mux {
@@ -50,7 +50,7 @@ func Routes(database db.Provider) *chi.Mux {
 // Runs the main API server until it's cancelled for some reason,
 // in which case it attempts to gracefully shutdown.
 // This function blocks.
-func ServeAPI(ctx context.Context, port int, database db.Provider, items items.Provider) {
+func ServeAPI(ctx context.Context, port int, database db.Provider, products products.Provider) {
 	router := Routes(database)
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", port),
