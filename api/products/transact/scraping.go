@@ -89,6 +89,61 @@ func (s *Scraper) ReloadSession() error {
 	return nil
 }
 
+// Expected JSON from items request
+type itemsWithInventoryResponse struct {
+	Result itemsWithInventoryResult `json:"GetItemsWithInventoryMainResult"`
+}
+
+type itemsWithInventoryResult struct {
+	Items []map[string]interface{} `json:"RootResults"`
+}
+
+// Attempts to get all items with inventory for the given item class name
+func (s *Scraper) GetItemsForClass(className string) ([]map[string]interface{}, error) {
+	// Get a lock on the session lock
+	s.Lock()
+	defer s.Unlock()
+
+	if !s.Ready {
+		// Cannot process request
+		return nil, errors.New("session has not been initialized")
+	}
+
+	url := s.baseUrl + "/QPWebOffice-Web-QuadPointDomain.svc/JSON/GetItemsWithInventoryMain"
+	method := "GET"
+
+	req, err := http.NewRequest(method, url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Accept", "application/json")
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", s.authToken))
+
+	res, err := s.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	// Parse JSON into expected shape
+	result := itemsWithInventoryResponse{}
+	err = json.NewDecoder(res.Body).Decode(&result)
+	if err != nil {
+		return nil, err
+	}
+
+	// Filter items by class name
+	items := make([]map[string]interface{}, 0)
+	for _, resultItem := range result.Result.Items {
+		if itemClassName, ok := resultItem["class_name"]; ok && itemClassName == className {
+			items = append(items, resultItem)
+		}
+	}
+
+	return items, nil
+}
+
 // Attempts to obtain a new session cookie from the Transact API,
 // and if successful, stores it in the cookie jar contained within the Scraper
 func (s *Scraper) getSessionCookie() error {
