@@ -12,7 +12,8 @@ type Provider interface {
 	Disconnect(ctx context.Context) error
 
 	AnnouncementProvider
-	ProductProvider
+	ProductMetadataProvider
+	LocationProvider
 }
 
 // Provides CRUD operations for type.Announcement structs
@@ -24,11 +25,20 @@ type AnnouncementProvider interface {
 	UpdateAnnouncement(ctx context.Context, id string, update map[string]interface{}) (*types.Announcement, error)
 }
 
-// Provides CRUD operations for type.Product structs
-type ProductProvider interface {
-	GetProduct(ctx context.Context, id string) (*types.Product, error)
-	GetAllProducts(ctx context.Context) ([]types.Product, error)
-	CreateProduct(ctx context.Context, product types.Product) error
+// Provides CRUD operations for type.ProductMetadata structs
+type ProductMetadataProvider interface {
+	GetProduct(ctx context.Context, id string) (*types.ProductMetadata, error)
+	GetAllProducts(ctx context.Context) ([]types.ProductMetadata, error)
+	CreateProduct(ctx context.Context, product types.ProductMetadata) error
 	DeleteProduct(ctx context.Context, id string) error
-	UpdateProduct(ctx context.Context, id string, update map[string]interface{}) (*types.Product, error)
+	UpdateProduct(ctx context.Context, id string, update map[string]interface{}) (*types.ProductMetadata, error)
+}
+
+// Provides CRUD operations for type.Location structs
+type LocationProvider interface {
+	GetLocation(ctx context.Context, id string) (*types.Location, error)
+	GetAllLocations(ctx context.Context) ([]types.Location, error)
+	CreateLocation(ctx context.Context, location types.Location) error
+	DeleteLocation(ctx context.Context, id string) error
+	UpdateLocation(ctx context.Context, id string, update map[string]interface{}) (*types.Location, error)
 }

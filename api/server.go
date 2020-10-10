@@ -12,12 +12,13 @@ import (
 	"github.com/go-chi/render"
 
 	"github.com/jd-116/klemis-kitchen-api/api/announcements"
-	"github.com/jd-116/klemis-kitchen-api/api/products"
+	"github.com/jd-116/klemis-kitchen-api/api/products" apiProducts
+	"github.com/jd-116/klemis-kitchen-api/api/locations"
 	"github.com/jd-116/klemis-kitchen-api/db"
 	"github.com/jd-116/klemis-kitchen-api/products"
 )
 
-func Routes(database db.Provider) *chi.Mux {
+func Routes(database db.Provider, products products.Provider) *chi.Mux {
 	// Approach from:
 	// https://itnext.io/structuring-a-production-grade-rest-api-in-golang-c0229b3feedc
 	// https://itnext.io/how-i-pass-around-shared-resources-databases-configuration-etc-within-golang-projects-b27af4d8e8a
@@ -39,9 +40,9 @@ func Routes(database db.Provider) *chi.Mux {
 			w.WriteHeader(204)
 		})
 
-		// Proof of concept routes
 		r.Mount("/announcements", announcements.Routes(database))
-		r.Mount("/products", products.Routes(database))
+		r.Mount("/products", apiProducts.Routes(database, products))
+		r.Mount("/locations", locations.Routes(database, products))
 	})
 
 	return router
@@ -51,7 +52,7 @@ func Routes(database db.Provider) *chi.Mux {
 // in which case it attempts to gracefully shutdown.
 // This function blocks.
 func ServeAPI(ctx context.Context, port int, database db.Provider, products products.Provider) {
-	router := Routes(database)
+	router := Routes(database, products)
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", port),
 		Handler: router,

@@ -6,6 +6,8 @@ import "context"
 type Provider interface {
 	Connect(ctx context.Context) error
 	Disconnect(ctx context.Context) error
+
+	PartialProductProvider
 }
 
 // Represents a partial products provider implementation
