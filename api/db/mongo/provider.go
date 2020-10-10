@@ -103,7 +103,7 @@ func (p *Provider) initialize(ctx context.Context) error {
 		return err
 	}
 
-	_, err := p.products().Indexes().CreateOne(ctx, mongo.IndexModel{
+	_, err = p.products().Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys:    bson.M{"id": 1},
 		Options: options.Index().SetUnique(true),
 	})
@@ -111,7 +111,7 @@ func (p *Provider) initialize(ctx context.Context) error {
 		return err
 	}
 
-	_, err := p.locations().Indexes().CreateOne(ctx, mongo.IndexModel{
+	_, err = p.locations().Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys:    bson.M{"id": 1},
 		Options: options.Index().SetUnique(true),
 	})
@@ -240,7 +240,7 @@ func (p *Provider) GetAllLocations(ctx context.Context) ([]types.Location, error
 		return nil, err
 	}
 
-	var locations []types.ProductMetadata
+	var locations []types.Location
 	err = cursor.All(ctx, &locations)
 	if err != nil {
 		return nil, err
@@ -248,7 +248,7 @@ func (p *Provider) GetAllLocations(ctx context.Context) ([]types.Location, error
 
 	// Return non-nil slice so JSON serialization is nice
 	if locations == nil {
-		return []types.ProductMetadata{}, nil
+		return []types.Location{}, nil
 	}
 
 	return locations, nil

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"sort"
 
 	"github.com/go-chi/chi"
 	"github.com/lithammer/fuzzysearch/fuzzy"
@@ -37,7 +38,7 @@ func GetAll(database db.Provider) http.HandlerFunc {
 		}
 
 		// Extract the location metadata before returning it
-		locationMetadata := make([]types.LocationMetadata)
+		locationMetadata := make([]types.LocationMetadata, len(locations))
 		for _, location := range locations {
 			locationMetadata = append(locationMetadata, location.LocationMetadata)
 		}
@@ -119,14 +120,14 @@ func GetProducts(database db.Provider, products products.Provider) http.HandlerF
 		}
 
 		// Create id -> dbProduct map so we can index it quickly
-		dbProductMap := make(map[string]types.Product)
+		dbProductMap := make(map[string]types.ProductMetadata)
 		for _, dbProduct := range dbProducts {
 			dbProductMap[dbProduct.ID] = dbProduct
 		}
 
 		// Merge db products with partial products
 		// to make `LocationProductDataSearch` structs
-		locationProducts := make([]LocationProductDataSearch, len(partialProducts))
+		locationProducts := make([]types.LocationProductDataSearch, len(partialProducts))
 		for _, partialProduct := range partialProducts {
 			// Make sure the name passes a search if it was given
 			if search != "" && !fuzzy.MatchNormalized(search, partialProduct.Name) {
@@ -134,22 +135,22 @@ func GetProducts(database db.Provider, products products.Provider) http.HandlerF
 			}
 
 			locationProduct := types.LocationProductDataSearch{
-				Name: partialProduct.Name,
-				ID: partialProduct.ID,
-				Amount: partialProduct.Amount,
+				Name:      partialProduct.Name,
+				ID:        partialProduct.ID,
+				Amount:    partialProduct.Amount,
 				Thumbnail: nil,
 			}
 
 			// See if this has additional metadata, and attach if so
 			if dbProduct, ok := dbProductMap[locationProduct.ID]; ok {
-				locationProduct.Thumnail = dbProduct.Thumbnail
+				locationProduct.Thumbnail = dbProduct.Thumbnail
 			}
 
 			locationProducts = append(locationProducts, locationProduct)
 		}
 
 		// Sort the location products map in the order of descending ID
-		sort.Slice(locationProducts, func (i, j int) bool {
+		sort.Slice(locationProducts, func(i, j int) bool {
 			return locationProducts[i].ID < locationProducts[j].ID
 		})
 
@@ -185,7 +186,7 @@ func GetProduct(database db.Provider, products products.Provider) http.HandlerFu
 			return
 		}
 
-		dbLocation, err := database.GetLocation(r.Context(), id)
+		dbLocation, err := database.GetLocation(r.Context(), locationID)
 		if err != nil {
 			util.Error(w, err)
 			return
@@ -198,16 +199,16 @@ func GetProduct(database db.Provider, products products.Provider) http.HandlerFu
 
 		// Construct a `LocationProductData` struct
 		resultProduct := types.LocationProductData{
-			ID: partialProduct.ID,
-			Name: partialProduct.Name,
-			Amount: partialProduct.Amount,
+			ID:        partialProduct.ID,
+			Name:      partialProduct.Name,
+			Amount:    partialProduct.Amount,
 			Nutrition: nil,
 			Thumbnail: nil,
 		}
 
 		// See if this has a corresponding DB product object
 		if dbProduct, err := database.GetProduct(r.Context(), productID); err == nil {
-			resultProduct.Nutrition = dbProduct.Nutirition
+			resultProduct.Nutrition = dbProduct.Nutrition
 			resultProduct.Thumbnail = dbProduct.Thumbnail
 		}
 
