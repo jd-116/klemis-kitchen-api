@@ -2,14 +2,14 @@ package types
 
 // Product is ...
 type ProductMetadata struct {
-	ID        string  `json:"id"`
-	Thumbnail *string `json:"thumbnail"`
-	Nutrition *string `json:"nutritional_facts"`
+	ID        string  `json:"id" bson:"id"`
+	Thumbnail *string `json:"thumbnail" bson:"thumbnail"`
+	Nutrition *string `json:"nutritional_facts" bson:"nutritional_facts"`
 }
 
 type ProductDataSearch struct {
 	Name      string  `json:"name"`
-	ID        string  `json:"ID"`
+	ID        string  `json:"id"`
 	Thumbnail *string `json:"thumbnail"`
 	Nutrition *string `json:"nutritional_facts"`
 }

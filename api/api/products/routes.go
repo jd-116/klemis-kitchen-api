@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"sort"
+	"strings"
 
 	"github.com/go-chi/chi"
 	"github.com/lithammer/fuzzysearch/fuzzy"
@@ -29,7 +30,7 @@ func GetAll(database db.Provider, cacheProducts products.Provider) http.HandlerF
 	return func(w http.ResponseWriter, r *http.Request) {
 		// See if we have search parameter,
 		// which can be empty
-		search := r.URL.Query().Get("search")
+		search := strings.ToLower(r.URL.Query().Get("search"))
 
 		dbLocations, err := database.GetAllLocations(r.Context())
 		if err != nil {
@@ -78,7 +79,7 @@ func GetAll(database db.Provider, cacheProducts products.Provider) http.HandlerF
 				}
 
 				// Make sure the name passes a search if it was given
-				if search != "" && !fuzzy.MatchNormalized(search, partialProduct.Name) {
+				if search != "" && !fuzzy.MatchNormalized(search, strings.ToLower(partialProduct.Name)) {
 					continue
 				}
 
@@ -103,14 +104,14 @@ func GetAll(database db.Provider, cacheProducts products.Provider) http.HandlerF
 
 		// Collect the product map into a slice,
 		// in the order of ascending IDs by first extracting all IDs
-		ids := make([]string, len(productMap))
+		ids := []string{}
 		for id, _ := range productMap {
 			ids = append(ids, id)
 		}
 		sort.Strings(ids)
 
 		// Finally, actually collect
-		resultProducts := make([]types.ProductDataSearch, len(productMap))
+		resultProducts := []types.ProductDataSearch{}
 		for _, id := range ids {
 			if product, ok := productMap[id]; ok {
 				resultProducts = append(resultProducts, product)

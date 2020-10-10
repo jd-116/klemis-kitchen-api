@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi"
 	"github.com/jd-116/klemis-kitchen-api/db"
@@ -82,6 +83,12 @@ func Create(database db.Provider) http.HandlerFunc {
 		err := json.NewDecoder(r.Body).Decode(&announcement)
 		if err != nil {
 			util.Error(w, err)
+			return
+		}
+
+		announcement.ID = strings.TrimSpace(announcement.ID)
+		if announcement.ID == "" {
+			util.Error(w, errors.New("announcement ID cannot be empty"))
 			return
 		}
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"sort"
+	"strings"
 
 	"github.com/go-chi/chi"
 	"github.com/lithammer/fuzzysearch/fuzzy"
@@ -37,15 +38,30 @@ func GetAll(database db.Provider) http.HandlerFunc {
 			return
 		}
 
-		// Extract the location metadata before returning it
-		locationMetadata := make([]types.LocationMetadata, len(locations))
-		for _, location := range locations {
-			locationMetadata = append(locationMetadata, location.LocationMetadata)
+		// See if we have full parameter,
+		// which can be empty
+		full := r.URL.Query().Get("full") == "true"
+
+		// Allow the user to get either the full Location structs
+		// or just the inner LocationMetadata structs.
+		// This allows the route to be used by both the admin dashboard
+		// (that needs the full struct)
+		// and the RN app frontend (that only needs the inner metadata struct)
+		var data interface{}
+		if !full {
+			// Extract the location metadata before returning it
+			locationMetadata := []types.LocationMetadata{}
+			for _, location := range locations {
+				locationMetadata = append(locationMetadata, location.Inner())
+			}
+			data = locationMetadata
+		} else {
+			data = locations
 		}
 
 		// Return the list in a JSON object
 		jsonResponse, err := json.Marshal(map[string]interface{}{
-			"locations": locationMetadata,
+			"locations": data,
 		})
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -76,7 +92,7 @@ func GetSingle(database db.Provider) http.HandlerFunc {
 
 		// Return the single location as the top-level JSON
 		// (make sure to return the inner metadata instead of the full struct)
-		jsonResponse, err := json.Marshal(location.LocationMetadata)
+		jsonResponse, err := json.Marshal(location.Inner())
 		if err != nil {
 			util.ErrorWithCode(w, err, http.StatusInternalServerError)
 			return
@@ -101,7 +117,7 @@ func GetProducts(database db.Provider, products products.Provider) http.HandlerF
 
 		// See if we have search parameter,
 		// which can be empty
-		search := r.URL.Query().Get("search")
+		search := strings.ToLower(r.URL.Query().Get("search"))
 
 		dbLocation, err := database.GetLocation(r.Context(), id)
 		if err != nil {
@@ -127,10 +143,10 @@ func GetProducts(database db.Provider, products products.Provider) http.HandlerF
 
 		// Merge db products with partial products
 		// to make `LocationProductDataSearch` structs
-		locationProducts := make([]types.LocationProductDataSearch, len(partialProducts))
+		locationProducts := []types.LocationProductDataSearch{}
 		for _, partialProduct := range partialProducts {
 			// Make sure the name passes a search if it was given
-			if search != "" && !fuzzy.MatchNormalized(search, partialProduct.Name) {
+			if search != "" && !fuzzy.MatchNormalized(search, strings.ToLower(partialProduct.Name)) {
 				continue
 			}
 
@@ -232,6 +248,18 @@ func Create(database db.Provider) http.HandlerFunc {
 		err := json.NewDecoder(r.Body).Decode(&location)
 		if err != nil {
 			util.Error(w, err)
+			return
+		}
+
+		location.ID = strings.TrimSpace(location.ID)
+		if location.ID == "" {
+			util.Error(w, errors.New("location ID cannot be empty"))
+			return
+		}
+
+		location.Name = strings.TrimSpace(location.Name)
+		if location.Name == "" {
+			util.Error(w, errors.New("location Name cannot be empty"))
 			return
 		}
 

@@ -3,6 +3,7 @@ package transact
 import (
 	"context"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/hako/durafmt"
@@ -155,6 +156,12 @@ func (p *Provider) tryFetch(delayUntilNext string) {
 		name, nameOk := rawName.(string)
 		id, idOk := rawId.(string)
 		if !(nameOk && idOk) {
+			continue
+		}
+
+		name = strings.TrimSpace(name)
+		id = strings.TrimSpace(id)
+		if name == "" || id == "" {
 			continue
 		}
 
