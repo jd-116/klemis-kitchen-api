@@ -1,6 +1,7 @@
 version: '3.4'
 services:
   api:
+    network_mode: "host"
     build:
       context: ./api
       network: host
