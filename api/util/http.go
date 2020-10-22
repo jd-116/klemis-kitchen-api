@@ -9,7 +9,7 @@ import (
 	"github.com/jd-116/klemis-kitchen-api/types"
 )
 
-// Resolves a status code from an error
+// ResponseCodeFromError resolves a status code from an error
 func ResponseCodeFromError(err error) int {
 	switch err.(type) {
 	case *db.DuplicateIDError:
@@ -21,12 +21,12 @@ func ResponseCodeFromError(err error) int {
 	}
 }
 
-// Creates a standardized error response
+// Error creates a standardized error response
 func Error(w http.ResponseWriter, originalError error) {
 	ErrorWithCode(w, originalError, ResponseCodeFromError(originalError))
 }
 
-// Creates a standardized error response with a status code
+// ErrorWithCode creates a standardized error response with a status code
 func ErrorWithCode(w http.ResponseWriter, originalError error, statusCode int) {
 	response := types.ErrorResponse{
 		Message: fmt.Sprint(originalError),

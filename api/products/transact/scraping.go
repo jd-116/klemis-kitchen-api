@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"net/http/cookiejar"
 	"strings"
@@ -19,7 +20,7 @@ type Scraper struct {
 	Ready         bool
 	ClientVersion string
 	client        *http.Client
-	baseUrl       string
+	baseURL       string
 	tenant        string
 	username      string
 	password      string
@@ -27,8 +28,8 @@ type Scraper struct {
 	sync.Mutex
 }
 
-// Creates a new instance of the scraper
-func NewScraper(baseUrl string, tenant string, username string, password string) (*Scraper, error) {
+// NewScraper creates a new instance of the scraper
+func NewScraper(baseURL string, tenant string, username string, password string) (*Scraper, error) {
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		return nil, err
@@ -36,7 +37,7 @@ func NewScraper(baseUrl string, tenant string, username string, password string)
 
 	return &Scraper{
 		Ready:    false,
-		baseUrl:  baseUrl,
+		baseURL:  baseURL,
 		tenant:   tenant,
 		username: username,
 		password: password,
@@ -46,7 +47,7 @@ func NewScraper(baseUrl string, tenant string, username string, password string)
 	}, nil
 }
 
-// Reloads the session on the scraper
+// ReloadSession reloads the session on the scraper
 func (s *Scraper) ReloadSession() error {
 	s.Lock()
 	defer s.Unlock()
@@ -98,7 +99,7 @@ type itemsWithInventoryResult struct {
 	Items []map[string]interface{} `json:"RootResults"`
 }
 
-// Attempts to get all items with inventory for the given item class name
+// GetItemsForClass attempts to get all items with inventory for the given item class name
 func (s *Scraper) GetItemsForClass(className string) ([]map[string]interface{}, error) {
 	// Get a lock on the session lock
 	s.Lock()
@@ -109,7 +110,7 @@ func (s *Scraper) GetItemsForClass(className string) ([]map[string]interface{}, 
 		return nil, errors.New("session has not been initialized")
 	}
 
-	url := s.baseUrl + "/QPWebOffice-Web-QuadPointDomain.svc/JSON/GetItemsWithInventoryMain"
+	url := s.baseURL + "/QPWebOffice-Web-QuadPointDomain.svc/JSON/GetItemsWithInventoryMain"
 	method := "GET"
 
 	req, err := http.NewRequest(method, url, nil)
@@ -135,11 +136,13 @@ func (s *Scraper) GetItemsForClass(className string) ([]map[string]interface{}, 
 
 	// Filter items by class name
 	items := make([]map[string]interface{}, 0)
+	originalCount := len(result.Result.Items)
 	for _, resultItem := range result.Result.Items {
 		if itemClassName, ok := resultItem["class_name"]; ok && itemClassName == className {
 			items = append(items, resultItem)
 		}
 	}
+	log.Printf("scraped %d -> %d raw items from the Transact API\n", originalCount, len(items))
 
 	return items, nil
 }
@@ -147,7 +150,7 @@ func (s *Scraper) GetItemsForClass(className string) ([]map[string]interface{}, 
 // Attempts to obtain a new session cookie from the Transact API,
 // and if successful, stores it in the cookie jar contained within the Scraper
 func (s *Scraper) getSessionCookie() error {
-	url := s.baseUrl + "/QPWebOffice-Web-AuthenticationService.svc/JSON/LoggedIn"
+	url := s.baseURL + "/QPWebOffice-Web-AuthenticationService.svc/JSON/LoggedIn"
 	method := "POST"
 	payload := strings.NewReader("{}")
 
@@ -156,7 +159,7 @@ func (s *Scraper) getSessionCookie() error {
 		return err
 	}
 
-	req.Header.Add("Referer", s.baseUrl+"/?tenant="+s.tenant)
+	req.Header.Add("Referer", s.baseURL+"/?tenant="+s.tenant)
 	req.Header.Add("Content-Type", "application/json")
 
 	res, err := s.client.Do(req)
@@ -169,14 +172,14 @@ func (s *Scraper) getSessionCookie() error {
 	if _, ok := res.Header["Set-Cookie"]; ok {
 		// Assume good
 		return nil
-	} else {
-		return errors.New("no cookie header found when attempting to get a session cookie")
 	}
+
+	return errors.New("no cookie header found when attempting to get a session cookie")
 }
 
 // Attempts to get the client version to use
 func (s *Scraper) getClientVersion() (string, error) {
-	url := s.baseUrl + "/?tenant=" + s.tenant
+	url := s.baseURL + "/?tenant=" + s.tenant
 	method := "GET"
 
 	req, err := http.NewRequest(method, url, nil)
@@ -204,9 +207,9 @@ func (s *Scraper) getClientVersion() (string, error) {
 		// Extract the version from the page title string
 		version := strings.TrimPrefix(titleStr, "QuadPoint Cloud ")
 		return version, nil
-	} else {
-		return "", errors.New(fmt.Sprintf("malformed page title '%s'; expecting 'QuadPoint Cloud X.X.X.X'", titleStr))
 	}
+
+	return "", fmt.Errorf("malformed page title '%s'; expecting 'QuadPoint Cloud X.X.X.X'", titleStr)
 }
 
 // Collects all the inner text for a given HTML node
@@ -222,9 +225,9 @@ func collectText(n *html.Node, buf *bytes.Buffer) {
 // Attempts to get a new authentication token by sending a request to the login route
 // using the current session cookie
 func (s *Scraper) getAuthenticationToken() (string, error) {
-	url := s.baseUrl + "/QPWebOffice-Web-AuthenticationService.svc/JSON/Authenticate"
+	url := s.baseURL + "/QPWebOffice-Web-AuthenticationService.svc/JSON/Authenticate"
 	method := "POST"
-	payloadJson := map[string]interface{}{
+	payloadJSON := map[string]interface{}{
 		"isPersistent":   true,
 		"customData":     "",
 		"dotNetLogicVer": 1,
@@ -234,7 +237,7 @@ func (s *Scraper) getAuthenticationToken() (string, error) {
 		"reset":          "***",
 		"id":             "***",
 	}
-	payload, err := json.Marshal(payloadJson)
+	payload, err := json.Marshal(payloadJSON)
 	if err != nil {
 		return "", nil
 	}
@@ -244,7 +247,7 @@ func (s *Scraper) getAuthenticationToken() (string, error) {
 		return "", err
 	}
 
-	req.Header.Add("Referer", s.baseUrl+"/?tenant="+s.tenant)
+	req.Header.Add("Referer", s.baseURL+"/?tenant="+s.tenant)
 	req.Header.Add("Content-Type", "application/json")
 
 	res, err := s.client.Do(req)
@@ -260,10 +263,10 @@ func (s *Scraper) getAuthenticationToken() (string, error) {
 			// Extract the auth token from the header value
 			version := strings.TrimPrefix(authValue, "Bearer ")
 			return version, nil
-		} else {
-			return "", errors.New(fmt.Sprintf("malformed authorization token '%s'; expecting 'Bearer X'", authValue))
 		}
-	} else {
-		return "", errors.New("no authorization header found when attempting to get a session cookie")
+
+		return "", fmt.Errorf("malformed authorization token '%s'; expecting 'Bearer X'", authValue)
 	}
+
+	return "", errors.New("no authorization header found when attempting to get a session cookie")
 }

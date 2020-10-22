@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// Gets an integer value from the environment and parses it
+// GetIntEnv gets an integer value from the environment and parses it
 func GetIntEnv(name string, varName string) (int, error) {
 	value, err := GetEnv(name, varName)
 	if err != nil {
@@ -16,14 +16,14 @@ func GetIntEnv(name string, varName string) (int, error) {
 
 	asInt, err := strconv.Atoi(value)
 	if err != nil {
-		return 0, fmt.Errorf("Environment variable value '%s' invalid for the %s ('%s')",
-			value, name, varName)
+		return 0, fmt.Errorf("Environment variable value '%s' invalid for the %s ('%s'):\n%s",
+			value, name, varName, err)
 	}
 
 	return asInt, nil
 }
 
-// Gets a duration value from the environment and parses it
+// GetDurationEnv gets a duration value from the environment and parses it
 func GetDurationEnv(name string, varName string) (time.Duration, error) {
 	value, err := GetEnv(name, varName)
 	if err != nil {
@@ -32,14 +32,14 @@ func GetDurationEnv(name string, varName string) (time.Duration, error) {
 
 	asDuration, err := time.ParseDuration(value)
 	if err != nil {
-		return 0, fmt.Errorf("Environment variable value '%s' invalid for the %s ('%s')",
-			value, name, varName)
+		return 0, fmt.Errorf("Environment variable value '%s' invalid for the %s ('%s'):\n%s",
+			value, name, varName, err)
 	}
 
 	return asDuration, nil
 }
 
-// Gets a string value from the environment and parses it
+// GetEnv gets a string value from the environment and parses it
 func GetEnv(name string, varName string) (string, error) {
 	value, exists := os.LookupEnv(varName)
 	if !exists {

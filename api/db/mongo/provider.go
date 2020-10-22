@@ -20,13 +20,14 @@ const (
 	duplicateError = 11000
 )
 
+// Provider implements the Provider interface for a MongoDB connection
 type Provider struct {
-	connectionUri string
+	connectionURI string
 	databaseName  string
 	client        *mongo.Client
 }
 
-// Creates a new provider and loads values in from the environment
+// NewProvider creates a new provider and loads values in from the environment
 func NewProvider() (*Provider, error) {
 	dbHost, err := util.GetEnv("database host name", "MONGO_DB_HOST")
 	if err != nil {
@@ -48,17 +49,18 @@ func NewProvider() (*Provider, error) {
 		return nil, err
 	}
 
-	connectionUri := fmt.Sprintf("mongodb+srv://%s:%s@%s.qkdgq.mongodb.net/%s?retryWrites=true&w=majority",
+	connectionURI := fmt.Sprintf("mongodb+srv://%s:%s@%s.qkdgq.mongodb.net/%s?retryWrites=true&w=majority",
 		dbHost, dbPwd, dbCluster, dbName)
 	return &Provider{
-		connectionUri: connectionUri,
+		connectionURI: connectionURI,
 		databaseName:  dbName,
 		client:        nil,
 	}, nil
 }
 
+// Connect connects to the MongoDB server and creates any indices as necessary
 func (p *Provider) Connect(ctx context.Context) error {
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(p.connectionUri))
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(p.connectionURI))
 	if err != nil {
 		return err
 	}
@@ -81,6 +83,7 @@ func (p *Provider) Connect(ctx context.Context) error {
 	return nil
 }
 
+// Disconnect terminates the connection to the MongODB server
 func (p *Provider) Disconnect(ctx context.Context) error {
 	err := p.client.Disconnect(ctx)
 	if err != nil {
@@ -134,9 +137,10 @@ func (p *Provider) locations() *mongo.Collection {
 	return p.client.Database(p.databaseName).Collection("locations")
 }
 
+// GetAnnouncement gets a single announcement given its ID
 func (p *Provider) GetAnnouncement(ctx context.Context, id string) (*types.Announcement, error) {
 	collection := p.announcements()
-	result := collection.FindOne(ctx, bson.D{{"id", id}})
+	result := collection.FindOne(ctx, bson.D{{Key: "id", Value: id}})
 	if result.Err() == mongo.ErrNoDocuments {
 		return nil, db.NewNotFoundError(id)
 	}
@@ -150,9 +154,10 @@ func (p *Provider) GetAnnouncement(ctx context.Context, id string) (*types.Annou
 	return &announcement, nil
 }
 
+// GetProduct gets a single product metadata object given its ID
 func (p *Provider) GetProduct(ctx context.Context, id string) (*types.ProductMetadata, error) {
 	collection := p.products()
-	result := collection.FindOne(ctx, bson.D{{"id", id}})
+	result := collection.FindOne(ctx, bson.D{{Key: "id", Value: id}})
 	if result.Err() == mongo.ErrNoDocuments {
 		return nil, db.NewNotFoundError(id)
 	}
@@ -166,9 +171,10 @@ func (p *Provider) GetProduct(ctx context.Context, id string) (*types.ProductMet
 	return &product, nil
 }
 
+// GetLocation gets a single location given its ID
 func (p *Provider) GetLocation(ctx context.Context, id string) (*types.Location, error) {
 	collection := p.locations()
-	result := collection.FindOne(ctx, bson.D{{"id", id}})
+	result := collection.FindOne(ctx, bson.D{{Key: "id", Value: id}})
 	if result.Err() == mongo.ErrNoDocuments {
 		return nil, db.NewNotFoundError(id)
 	}
@@ -182,11 +188,12 @@ func (p *Provider) GetLocation(ctx context.Context, id string) (*types.Location,
 	return &location, nil
 }
 
+// GetAllAnnouncements gets a slice of all announcements in the database
 func (p *Provider) GetAllAnnouncements(ctx context.Context) ([]types.Announcement, error) {
 	collection := p.announcements()
 
 	options := options.Find()
-	options.SetSort(bson.D{{"id", 1}})
+	options.SetSort(bson.D{{Key: "id", Value: 1}})
 	cursor, err := collection.Find(ctx, bson.D{}, options)
 	if err != nil {
 		return nil, err
@@ -206,11 +213,12 @@ func (p *Provider) GetAllAnnouncements(ctx context.Context) ([]types.Announcemen
 	return announcements, nil
 }
 
+// GetAllProducts gets a slice of all product metadata objects in the database
 func (p *Provider) GetAllProducts(ctx context.Context) ([]types.ProductMetadata, error) {
 	collection := p.products()
 
 	options := options.Find()
-	options.SetSort(bson.D{{"id", 1}})
+	options.SetSort(bson.D{{Key: "id", Value: 1}})
 	cursor, err := collection.Find(ctx, bson.D{}, options)
 	if err != nil {
 		return nil, err
@@ -230,11 +238,12 @@ func (p *Provider) GetAllProducts(ctx context.Context) ([]types.ProductMetadata,
 	return products, nil
 }
 
+// GetAllLocations gets a slice of all locations in the database
 func (p *Provider) GetAllLocations(ctx context.Context) ([]types.Location, error) {
 	collection := p.locations()
 
 	options := options.Find()
-	options.SetSort(bson.D{{"id", 1}})
+	options.SetSort(bson.D{{Key: "id", Value: 1}})
 	cursor, err := collection.Find(ctx, bson.D{}, options)
 	if err != nil {
 		return nil, err
@@ -254,6 +263,7 @@ func (p *Provider) GetAllLocations(ctx context.Context) ([]types.Location, error
 	return locations, nil
 }
 
+// CreateAnnouncement attempts to insert a new announcement into the database
 func (p *Provider) CreateAnnouncement(ctx context.Context, announcement types.Announcement) error {
 	collection := p.announcements()
 	_, err := collection.InsertOne(ctx, announcement)
@@ -269,6 +279,7 @@ func (p *Provider) CreateAnnouncement(ctx context.Context, announcement types.An
 	return nil
 }
 
+// CreateProduct attempts to insert a new product metadata object into the database
 func (p *Provider) CreateProduct(ctx context.Context, product types.ProductMetadata) error {
 	collection := p.products()
 	_, err := collection.InsertOne(ctx, product)
@@ -284,6 +295,7 @@ func (p *Provider) CreateProduct(ctx context.Context, product types.ProductMetad
 	return nil
 }
 
+// CreateLocation attempts to insert a new location into the database
 func (p *Provider) CreateLocation(ctx context.Context, location types.Location) error {
 	collection := p.locations()
 	_, err := collection.InsertOne(ctx, location)
@@ -311,9 +323,10 @@ func isDuplicate(writeException mongo.WriteException) bool {
 	return false
 }
 
+// DeleteAnnouncement deletes an existing announcement by its ID
 func (p *Provider) DeleteAnnouncement(ctx context.Context, id string) error {
 	collection := p.announcements()
-	result, err := collection.DeleteOne(ctx, bson.D{{"id", id}})
+	result, err := collection.DeleteOne(ctx, bson.D{{Key: "id", Value: id}})
 	if err != nil {
 		return err
 	}
@@ -325,9 +338,10 @@ func (p *Provider) DeleteAnnouncement(ctx context.Context, id string) error {
 	return nil
 }
 
+// DeleteProduct deletes an existing product metadata object by its ID
 func (p *Provider) DeleteProduct(ctx context.Context, id string) error {
 	collection := p.products()
-	result, err := collection.DeleteOne(ctx, bson.D{{"id", id}})
+	result, err := collection.DeleteOne(ctx, bson.D{{Key: "id", Value: id}})
 	if err != nil {
 		return err
 	}
@@ -339,9 +353,10 @@ func (p *Provider) DeleteProduct(ctx context.Context, id string) error {
 	return nil
 }
 
+// DeleteLocation deletes an existing location by its ID
 func (p *Provider) DeleteLocation(ctx context.Context, id string) error {
 	collection := p.locations()
-	result, err := collection.DeleteOne(ctx, bson.D{{"id", id}})
+	result, err := collection.DeleteOne(ctx, bson.D{{Key: "id", Value: id}})
 	if err != nil {
 		return err
 	}
@@ -353,16 +368,18 @@ func (p *Provider) DeleteLocation(ctx context.Context, id string) error {
 	return nil
 }
 
+// UpdateAnnouncement updates an existing announcement by its ID
+// and a partial document containing new fields that override current ones
 func (p *Provider) UpdateAnnouncement(ctx context.Context, id string, update map[string]interface{}) (*types.Announcement, error) {
 	// Construct the patch query from the map
 	updateDocument := bson.D{}
 	for key, value := range update {
-		updateDocument = append(updateDocument, bson.E{key, value})
+		updateDocument = append(updateDocument, bson.E{Key: key, Value: value})
 	}
 
 	collection := p.announcements()
-	filter := bson.D{{"id", id}}
-	updateQuery := bson.D{{"$set", updateDocument}}
+	filter := bson.D{{Key: "id", Value: id}}
+	updateQuery := bson.D{{Key: "$set", Value: updateDocument}}
 	var updatedAnnouncement types.Announcement
 	err := collection.FindOneAndUpdate(ctx, filter, updateQuery).Decode(&updatedAnnouncement)
 	if err != nil {
@@ -374,16 +391,18 @@ func (p *Provider) UpdateAnnouncement(ctx context.Context, id string, update map
 	return &updatedAnnouncement, nil
 }
 
+// UpdateProduct updates an existing product metadata object by its ID
+// and a partial document containing new fields that override current ones
 func (p *Provider) UpdateProduct(ctx context.Context, id string, update map[string]interface{}) (*types.ProductMetadata, error) {
 	// Construct the patch query from the map
 	updateDocument := bson.D{}
 	for key, value := range update {
-		updateDocument = append(updateDocument, bson.E{key, value})
+		updateDocument = append(updateDocument, bson.E{Key: key, Value: value})
 	}
 
 	collection := p.products()
-	filter := bson.D{{"id", id}}
-	updateQuery := bson.D{{"$set", updateDocument}}
+	filter := bson.D{{Key: "id", Value: id}}
+	updateQuery := bson.D{{Key: "$set", Value: updateDocument}}
 	var updatedProduct types.ProductMetadata
 	err := collection.FindOneAndUpdate(ctx, filter, updateQuery).Decode(&updatedProduct)
 	if err != nil {
@@ -395,16 +414,18 @@ func (p *Provider) UpdateProduct(ctx context.Context, id string, update map[stri
 	return &updatedProduct, nil
 }
 
+// UpdateLocation updates an existing location by its ID
+// and a partial document containing new fields that override current ones
 func (p *Provider) UpdateLocation(ctx context.Context, id string, update map[string]interface{}) (*types.Location, error) {
 	// Construct the patch query from the map
 	updateDocument := bson.D{}
 	for key, value := range update {
-		updateDocument = append(updateDocument, bson.E{key, value})
+		updateDocument = append(updateDocument, bson.E{Key: key, Value: value})
 	}
 
 	collection := p.locations()
-	filter := bson.D{{"id", id}}
-	updateQuery := bson.D{{"$set", updateDocument}}
+	filter := bson.D{{Key: "id", Value: id}}
+	updateQuery := bson.D{{Key: "$set", Value: updateDocument}}
 	var updatedLocation types.Location
 	err := collection.FindOneAndUpdate(ctx, filter, updateQuery).Decode(&updatedLocation)
 	if err != nil {

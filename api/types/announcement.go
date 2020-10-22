@@ -1,14 +1,11 @@
 package types
 
-// Announcement is ...
-type Announcement struct {
-	ID        string `json:"id" bson:"id"`
-	Name      string `json:"name" bson:"name"`
-	Timestamp string `json:"timestamp" bson:"timestamp"`
-	Important bool   `json:"important" bson:"important"`
-}
+import "time"
 
-// ErrorResponse is ...
-type ErrorResponse struct {
-	Message string `json:"message"`
+// Announcement is the document stored in MongoDB for a single announcement
+type Announcement struct {
+	ID        string    `json:"id" bson:"id"`
+	Title     string    `json:"title" bson:"title"`
+	Body      string    `json:"body" bson:"body"`
+	Timestamp time.Time `json:"timestamp" bson:"timestamp"`
 }

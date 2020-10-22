@@ -12,7 +12,7 @@ import (
 	"github.com/jd-116/klemis-kitchen-api/util"
 )
 
-// Bundles together a stateful item provider via the Transact API,
+// Provider bundles together a stateful item provider via the Transact API,
 // including an active session with the API
 // and a cache in front of it
 //
@@ -30,11 +30,11 @@ type Provider struct {
 	*products.Cache
 }
 
-// Loads values from the environment
+// NewProvider loads values from the environment
 // and creates the provider
 // (doesn't involve authentication or start goroutines)
 func NewProvider() (*Provider, error) {
-	baseUrl, err := util.GetEnv("Transact base URL", "TRANSACT_BASE_URL")
+	baseURL, err := util.GetEnv("Transact base URL", "TRANSACT_BASE_URL")
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +70,7 @@ func NewProvider() (*Provider, error) {
 	}
 
 	// Create the scraper
-	scraper, err := NewScraper(baseUrl, tenant, username, password)
+	scraper, err := NewScraper(baseURL, tenant, username, password)
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +88,7 @@ func NewProvider() (*Provider, error) {
 	}, nil
 }
 
-// Initializes the authentication
+// Connect initializes the authentication
 // and starts goroutines to periodically re-authenticate/fetch
 func (p *Provider) Connect(ctx context.Context) error {
 	// Load the session
@@ -137,7 +137,7 @@ func (p *Provider) tryFetch(delayUntilNext string) {
 	totalLoaded := 0
 	for _, partialProduct := range rawPartialProducts {
 		// TODO remove hard-coded location identifier once
-		// location matching is implement
+		// location matching is implemented
 		location := "main_quad"
 
 		// Initialize the inner map if needed
@@ -147,14 +147,14 @@ func (p *Provider) tryFetch(delayUntilNext string) {
 
 		// Construct the partial product by parsing it
 		rawName, nameOk := partialProduct["label"]
-		rawId, idOk := partialProduct["number"]
+		rawID, idOk := partialProduct["number"]
 		if !(nameOk && idOk) {
 			continue
 		}
 
 		// Parse name/id to string
 		name, nameOk := rawName.(string)
-		id, idOk := rawId.(string)
+		id, idOk := rawID.(string)
 		if !(nameOk && idOk) {
 			continue
 		}
@@ -167,10 +167,10 @@ func (p *Provider) tryFetch(delayUntilNext string) {
 
 		// Parse the amount (optional)
 		amount := 0
-		if rawAmount, ok := partialProduct["amount"]; ok {
-			// Load the amount if it is an int and is greater than 0
-			if amountInt, ok := rawAmount.(int); ok && amountInt > 0 {
-				amount = amountInt
+		if rawAmount, ok := partialProduct["total_on_hand"]; ok && rawAmount != nil {
+			// Load the amount if it is a number and is greater than 0
+			if amountFloat, ok := rawAmount.(float64); ok && amountFloat > 0 {
+				amount = int(amountFloat)
 			}
 		}
 
@@ -185,7 +185,7 @@ func (p *Provider) tryFetch(delayUntilNext string) {
 		totalLoaded++
 	}
 
-	log.Printf("fetched Transact API partial product cache (%d total); fetching again in %s\n",
+	log.Printf("reloaded Transact API partial product cache (%d total); fetching again in %s\n",
 		totalLoaded, delayUntilNext)
 
 	// Load the products into the cache
@@ -215,7 +215,7 @@ func (p *Provider) periodReloadSession() {
 	}
 }
 
-// Stops all periodic goroutines
+// Disconnect stops all periodic goroutines
 // (for re-authentication and fetching)
 func (p *Provider) Disconnect(ctx context.Context) error {
 	p.stopFetch <- struct{}{}

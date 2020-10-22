@@ -18,7 +18,38 @@ import (
 	"github.com/jd-116/klemis-kitchen-api/products"
 )
 
-func Routes(database db.Provider, products products.Provider) *chi.Mux {
+// ServeAPI runs the main API server until it's cancelled for some reason,
+// in which case it attempts to gracefully shutdown.
+// This function blocks.
+func ServeAPI(ctx context.Context, port int, database db.Provider, products products.Provider) {
+	router := routes(database, products)
+	server := &http.Server{
+		Addr:    fmt.Sprintf(":%d", port),
+		Handler: router,
+	}
+
+	go func() {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("listen: %s\n", err)
+		}
+	}()
+	log.Printf("API server started; serving on port %d\n", port)
+
+	<-ctx.Done()
+	log.Println("API server stopped")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer func() {
+		cancel()
+	}()
+
+	if err := server.Shutdown(ctx); err != nil {
+		log.Fatalf("API server shutdown failed: %+v", err)
+	}
+	log.Println("API server exited properly")
+}
+
+func routes(database db.Provider, products products.Provider) *chi.Mux {
 	// Approach from:
 	// https://itnext.io/structuring-a-production-grade-rest-api-in-golang-c0229b3feedc
 	// https://itnext.io/how-i-pass-around-shared-resources-databases-configuration-etc-within-golang-projects-b27af4d8e8a
@@ -46,35 +77,4 @@ func Routes(database db.Provider, products products.Provider) *chi.Mux {
 	})
 
 	return router
-}
-
-// Runs the main API server until it's cancelled for some reason,
-// in which case it attempts to gracefully shutdown.
-// This function blocks.
-func ServeAPI(ctx context.Context, port int, database db.Provider, products products.Provider) {
-	router := Routes(database, products)
-	server := &http.Server{
-		Addr:    fmt.Sprintf(":%d", port),
-		Handler: router,
-	}
-
-	go func() {
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("listen: %s\n", err)
-		}
-	}()
-	log.Printf("API server started; serving on port %d\n", port)
-
-	<-ctx.Done()
-	log.Println("API server stopped")
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer func() {
-		cancel()
-	}()
-
-	if err := server.Shutdown(ctx); err != nil {
-		log.Fatalf("API server shutdown failed: %+v", err)
-	}
-	log.Println("API server exited properly")
 }

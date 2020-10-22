@@ -16,6 +16,8 @@ import (
 	"github.com/jd-116/klemis-kitchen-api/util"
 )
 
+// Routes creates a new Chi router with all of the routes for the product resource,
+// at the root level
 func Routes(database db.Provider, products products.Provider) *chi.Mux {
 	router := chi.NewRouter()
 	router.Get("/", GetAll(database, products))
@@ -23,7 +25,7 @@ func Routes(database db.Provider, products products.Provider) *chi.Mux {
 	return router
 }
 
-// Gets all products from the database,
+// GetAll gets all products from the database,
 // with an optional search querystring param
 func GetAll(database db.Provider, cacheProducts products.Provider) http.HandlerFunc {
 	// Use a closure to inject the database provider
@@ -105,7 +107,7 @@ func GetAll(database db.Provider, cacheProducts products.Provider) http.HandlerF
 		// Collect the product map into a slice,
 		// in the order of ascending IDs by first extracting all IDs
 		ids := []string{}
-		for id, _ := range productMap {
+		for id := range productMap {
 			ids = append(ids, id)
 		}
 		sort.Strings(ids)
@@ -138,7 +140,7 @@ type productsData struct {
 	amounts        map[string]int
 }
 
-// Gets a single product from the database by its ID
+// GetSingle gets a single product from the database by its ID
 func GetSingle(database db.Provider, cacheProducts products.Provider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
@@ -148,13 +150,13 @@ func GetSingle(database db.Provider, cacheProducts products.Provider) http.Handl
 			return
 		}
 
-		product, err := database.GetProduct(r.Context(), id)
+		productMetadata, err := database.GetProduct(r.Context(), id)
 		if err != nil {
-			util.Error(w, err)
-			return
+			// Continue with partial product
+			productMetadata = nil
 		}
 
-		locations, err := cacheProducts.GetAllLocations()
+		cacheLocations, err := cacheProducts.GetAllLocations()
 		if err != nil {
 			util.Error(w, err)
 			return
@@ -166,18 +168,30 @@ func GetSingle(database db.Provider, cacheProducts products.Provider) http.Handl
 			return
 		}
 
+		// Create identifier -> DB Location map
+		dbLocationMap := make(map[string]types.Location)
+		for _, dbLocation := range dbLocations {
+			dbLocationMap[dbLocation.TransactIdentifier] = dbLocation
+		}
+
 		var finalProduct productsData
 		finalProduct.partialProduct.ID = id
+		finalProduct.amounts = make(map[string]int)
 
-		for _, dblocation := range dbLocations {
-			for _, val := range locations {
-				if dblocation.TransactIdentifier == val {
-					singleProduct, err := cacheProducts.GetProduct(val, id)
-					if err != nil {
-						util.Error(w, err)
-						return
-					}
-					finalProduct.amounts[val] = singleProduct.Amount
+		for _, cacheLocation := range cacheLocations {
+			// Make sure this is a concrete location
+			if dbLocation, ok := dbLocationMap[cacheLocation]; ok {
+				singleProduct, err := cacheProducts.GetProduct(cacheLocation, id)
+				if err != nil {
+					util.Error(w, err)
+					return
+				}
+
+				finalProduct.amounts[dbLocation.ID] = singleProduct.Amount
+
+				// Store the name if not set
+				if finalProduct.partialProduct.Name == "" {
+					finalProduct.partialProduct.Name = singleProduct.Name
 				}
 			}
 		}
@@ -185,9 +199,13 @@ func GetSingle(database db.Provider, cacheProducts products.Provider) http.Handl
 		var resultProduct types.ProductData
 		resultProduct.ID = finalProduct.partialProduct.ID
 		resultProduct.Name = finalProduct.partialProduct.Name
-		resultProduct.Nutrition = product.Nutrition
-		resultProduct.Thumbnail = product.Thumbnail
 		resultProduct.Amounts = finalProduct.amounts
+
+		// Attach product metadata if found
+		if productMetadata != nil {
+			resultProduct.Nutrition = productMetadata.Nutrition
+			resultProduct.Thumbnail = productMetadata.Thumbnail
+		}
 
 		// Return the single product as the top-level JSON
 		jsonResponse, err := json.Marshal(resultProduct)

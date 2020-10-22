@@ -16,6 +16,8 @@ import (
 	"github.com/jd-116/klemis-kitchen-api/util"
 )
 
+// Routes creates a new Chi router with all of the routes for the location resource,
+// at the root level
 func Routes(database db.Provider, products products.Provider) *chi.Mux {
 	router := chi.NewRouter()
 	router.Get("/", GetAll(database))
@@ -28,7 +30,7 @@ func Routes(database db.Provider, products products.Provider) *chi.Mux {
 	return router
 }
 
-// Gets all locations from the database
+// GetAll gets all locations from the database
 func GetAll(database db.Provider) http.HandlerFunc {
 	// Use a closure to inject the database provider
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -74,7 +76,7 @@ func GetAll(database db.Provider) http.HandlerFunc {
 	}
 }
 
-// Gets a single location from the database by its ID
+// GetSingle gets a single location from the database by its ID
 func GetSingle(database db.Provider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
@@ -104,7 +106,7 @@ func GetSingle(database db.Provider) http.HandlerFunc {
 	}
 }
 
-// Gets all products that exist at this location,
+// GetProducts gets all products that exist at this location,
 // with an optional search querystring param
 func GetProducts(database db.Provider, products products.Provider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -185,7 +187,7 @@ func GetProducts(database db.Provider, products products.Provider) http.HandlerF
 	}
 }
 
-// Gets a single product at this location
+// GetProduct gets a single product at this location
 func GetProduct(database db.Provider, products products.Provider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		locationID := chi.URLParam(r, "id")
@@ -241,7 +243,7 @@ func GetProduct(database db.Provider, products products.Provider) http.HandlerFu
 	}
 }
 
-// Creates a new location in the database
+// Create creates a new location in the database
 func Create(database db.Provider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var location types.Location
@@ -282,7 +284,7 @@ func Create(database db.Provider) http.HandlerFunc {
 	}
 }
 
-// Deletes a location in the database
+// Delete deletes a location in the database
 func Delete(database db.Provider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
@@ -302,7 +304,7 @@ func Delete(database db.Provider) http.HandlerFunc {
 	}
 }
 
-// Updates a location in the database
+// Update updates a location in the database
 func Update(database db.Provider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")

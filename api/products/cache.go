@@ -4,7 +4,7 @@ import (
 	"sync"
 )
 
-// Represents a cache of Partial Products
+// Cache represents a cache of Partial Products
 // that implements the PartialProductProvider interface
 type Cache struct {
 	sync.Mutex
@@ -13,7 +13,7 @@ type Cache struct {
 	partialProducts map[string]map[string]PartialProduct
 }
 
-// Loads a cache from the source products map,
+// Load loads a cache from the source products map,
 // marking it as ready.
 //
 // Note: uses passed in map as the inner map;
@@ -28,13 +28,13 @@ func (c *Cache) Load(partialProducts map[string]map[string]PartialProduct) {
 
 	// Build the location identifiers slice
 	locations := make([]string, 0)
-	for location, _ := range partialProducts {
+	for location := range partialProducts {
 		locations = append(locations, location)
 	}
 	c.locations = locations
 }
 
-// Gets all location identifiers
+// GetAllLocations gets all location identifiers
 func (c *Cache) GetAllLocations() ([]string, error) {
 	c.Lock()
 	defer c.Unlock()
@@ -46,7 +46,7 @@ func (c *Cache) GetAllLocations() ([]string, error) {
 	return c.locations, nil
 }
 
-// Gets all products for the given location identifier
+// GetAllProducts gets all products for the given location identifier
 func (c *Cache) GetAllProducts(location string) ([]PartialProduct, error) {
 	c.Lock()
 	defer c.Unlock()
@@ -57,18 +57,18 @@ func (c *Cache) GetAllProducts(location string) ([]PartialProduct, error) {
 
 	if locationProducts, ok := c.partialProducts[location]; ok {
 		// Construct a slice of all products at that location
-		partialProducts := make([]PartialProduct, len(locationProducts))
+		partialProducts := []PartialProduct{}
 		for _, value := range locationProducts {
 			partialProducts = append(partialProducts, value)
 		}
 
 		return partialProducts, nil
-	} else {
-		return nil, NewLocationNotFoundError(location)
 	}
+
+	return nil, NewLocationNotFoundError(location)
 }
 
-// Gets a single partial product from the given location with the given ID
+// GetProduct gets a single partial product from the given location with the given ID
 func (c *Cache) GetProduct(location string, id string) (*PartialProduct, error) {
 	c.Lock()
 	defer c.Unlock()
@@ -81,10 +81,10 @@ func (c *Cache) GetProduct(location string, id string) (*PartialProduct, error) 
 		// Attempt to find the given partial product in this location
 		if partialProduct, ok := locationProducts[id]; ok {
 			return &partialProduct, nil
-		} else {
-			return nil, NewPartialProductNotFoundError(location, id)
 		}
-	} else {
-		return nil, NewLocationNotFoundError(location)
+
+		return nil, NewPartialProductNotFoundError(location, id)
 	}
+
+	return nil, NewLocationNotFoundError(location)
 }

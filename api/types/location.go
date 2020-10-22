@@ -14,7 +14,7 @@ type Location struct {
 	Location           GeoCoordinates `json:"location" bson:"location"`
 }
 
-// Gets the inner representation for this location
+// Inner gets the inner representation for this location
 func (l *Location) Inner() LocationMetadata {
 	return LocationMetadata{
 		ID:           l.ID,

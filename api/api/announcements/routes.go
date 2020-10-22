@@ -12,6 +12,8 @@ import (
 	"github.com/jd-116/klemis-kitchen-api/util"
 )
 
+// Routes creates a new Chi router with all of the routes for the announcement resource,
+// at the root level
 func Routes(database db.Provider) *chi.Mux {
 	router := chi.NewRouter()
 	router.Get("/", GetAll(database))
@@ -22,7 +24,7 @@ func Routes(database db.Provider) *chi.Mux {
 	return router
 }
 
-// Gets all announcements from the database
+// GetAll gets all announcements from the database
 func GetAll(database db.Provider) http.HandlerFunc {
 	// Use a closure to inject the database provider
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -47,7 +49,7 @@ func GetAll(database db.Provider) http.HandlerFunc {
 	}
 }
 
-// Gets a single announcement from the database by its ID
+// GetSingle gets a single announcement from the database by its ID
 func GetSingle(database db.Provider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
@@ -76,7 +78,7 @@ func GetSingle(database db.Provider) http.HandlerFunc {
 	}
 }
 
-// Creates a new announcement in the database
+// Create creates a new announcement in the database
 func Create(database db.Provider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var announcement types.Announcement
@@ -111,7 +113,7 @@ func Create(database db.Provider) http.HandlerFunc {
 	}
 }
 
-// Deletes a announcement in the database
+// Delete deletes a announcement in the database
 func Delete(database db.Provider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
@@ -131,7 +133,7 @@ func Delete(database db.Provider) http.HandlerFunc {
 	}
 }
 
-// Updates a announcement in the database
+// Update updates a announcement in the database
 func Update(database db.Provider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
