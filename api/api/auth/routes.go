@@ -213,6 +213,6 @@ func terminalRedirect(w http.ResponseWriter, r *http.Request,
 	q.Add(key, value)
 	u.RawQuery = q.Encode()
 
-	http.Redirect(w, r, u.String(), http.StatusTemporaryRedirect)
+	http.Redirect(w, r, u.String(), http.StatusMovedTemporarily)
 	return nil
 }
