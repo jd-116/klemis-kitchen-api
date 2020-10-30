@@ -21,7 +21,7 @@ func Routes(database db.Provider) *chi.Mux {
 	router.Get("/{id}", GetSingle(database))
 	router.Post("/", Create(database))
 	router.Delete("/{id}", Delete(database))
-	router.Patch("/", Update(database))
+	router.Patch("/{id}", Update(database))
 	return router
 }
 
