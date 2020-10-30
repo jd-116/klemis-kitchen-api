@@ -209,10 +209,10 @@ func terminalRedirect(w http.ResponseWriter, r *http.Request,
 		return err
 	}
 
-	// Add the key-value pair to the existiStatusSeeOtherng query
+	// Add the key-value pair to the existing query
 	q.Add(key, value)
 	u.RawQuery = q.Encode()
 
-	http.Redirect(w, r, u.String(), http.StatusSeeOther)
+	http.Redirect(w, r, u.String(), http.StatusTemporaryRedirect)
 	return nil
 }
