@@ -45,9 +45,9 @@ func (m *FlowContinuationMap) evict(interval time.Duration, maxTTL int64) {
 
 // Gets a value in the map, or returns with false as the second value
 func (m *FlowContinuationMap) Get(key string) (string, bool) {
-	result, ok := m.internal.Load(key)
+	result, ok := m.internal.LoadAndDelete(key)
 	if ok {
-		return result.(string), true
+		return result.(item).value, true
 	}
 
 	return "", false
@@ -55,5 +55,5 @@ func (m *FlowContinuationMap) Get(key string) (string, bool) {
 
 // Stores a value in the map
 func (m *FlowContinuationMap) Put(key string, value string) {
-	m.internal.Store(key, value)
+	m.internal.Store(key, item{value, time.Now().Unix()})
 }
