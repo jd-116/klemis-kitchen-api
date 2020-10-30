@@ -94,7 +94,7 @@ func Login(casProvider *cas.Provider, flowContinuation *FlowContinuationMap,
 			}
 
 			// Make sure the redirect URI is valid
-			if isRedirectURIValid(redirectURI) {
+			if !isRedirectURIValid(redirectURI) {
 				util.ErrorWithCode(w, errors.New("redirect_uri is not valid"),
 					http.StatusBadRequest)
 				return
