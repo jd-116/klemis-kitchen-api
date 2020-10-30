@@ -133,7 +133,7 @@ func Login(casProvider *cas.Provider, flowContinuation *NonceMap,
 			// by looking for the flow continuation cookie
 			flowContinuationCookie, err := r.Cookie(FlowContinuationCookieName)
 			if err != nil {
-				util.ErrorWithCode(w, errors.New("request doesn't come at the end of authentication flow"),
+				util.ErrorWithCode(w, errors.New("request doesn't contain flow continuation nonce"),
 					http.StatusForbidden)
 				return
 			}
@@ -141,13 +141,13 @@ func Login(casProvider *cas.Provider, flowContinuation *NonceMap,
 			// Extract the original redirect URI from the flow continuation nonce
 			redirectURIRaw, ok := flowContinuation.Use(flowContinuationCookie.Value)
 			if !ok {
-				util.ErrorWithCode(w, errors.New("request doesn't come at the end of authentication flow"),
+				util.ErrorWithCode(w, errors.New("request had unknown flow continuation nonce"),
 					http.StatusForbidden)
 				return
 			}
 			redirectURI, ok := redirectURIRaw.(string)
 			if !ok {
-				util.Error(w, errors.New("request had invalid continuation nonce value"))
+				util.Error(w, errors.New("request had invalid flow continuation nonce value"))
 				return
 			}
 
