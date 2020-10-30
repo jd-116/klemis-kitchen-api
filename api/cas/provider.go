@@ -105,38 +105,20 @@ func (c *Provider) ServiceValidate(r *http.Request, ticket string) (*Identity, e
 		return nil, err
 	}
 
-	// Create and serialize the inner SAML request
-	saml := samlRequest{
-		XMLName:           xml.Name{Space: "urn:oasis:names:tc:SAML:1.0:protocol", Local: "Request"},
-		MajorVersion:      "1",
-		MinorVersion:      "1",
-		RequestID:         requestID.String(),
-		IssueInstant:      time.Now().UTC().Format(time.RFC3339),
-		AssertionArtifact: ticket,
-	}
-	samlBytes, err := xml.Marshal(&saml)
+	// Create the envelope XML
+	envelopeBytes := &bytes.Buffer{}
+	err = c.samlValidateTemplate.Execute(envelopeBytes, samlValidateArguments{
+		RequestID:    requestID.String(),
+		IssueInstant: time.Now().UTC().Format(time.RFC3339),
+		Ticket:       ticket,
+	})
 	if err != nil {
 		return nil, err
 	}
-
-	// Create and serialize the outer SOAP envelope
-	envelope := soapEnvelope{
-		XMLName: xml.Name{Space: "http://schemas.xmlsoap.org/soap/envelope/", Local: "Envelope"},
-		Header:  soapHeader{},
-		Body:    soapBody{InnerXML: samlBytes},
-	}
-	envelopeBytes, err := xml.Marshal(&envelope)
-	if err != nil {
-		return nil, err
-	}
-
-	log.Println(string(envelopeBytes))
-	log.Println()
 
 	// Create the request with all options
 	method := http.MethodPost
-	envelopeBody := bytes.NewReader(envelopeBytes)
-	req, err := http.NewRequest(method, samlValidateURL.String(), envelopeBody)
+	req, err := http.NewRequest(method, samlValidateURL.String(), envelopeBytes)
 	if err != nil {
 		return nil, err
 	}

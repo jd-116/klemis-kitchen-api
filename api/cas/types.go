@@ -29,15 +29,6 @@ type soapHeader struct {
 	InnerXML []byte `xml:",innerxml"`
 }
 
-type samlRequest struct {
-	XMLName           xml.Name `xml:"urn:oasis:names:tc:SAML:1.0:protocol Request"`
-	MajorVersion      string   `xml:"MajorVersion,attr"`
-	MinorVersion      string   `xml:"MinorVersion,attr"`
-	RequestID         string   `xml:"RequestID,attr"`
-	IssueInstant      string   `xml:"IssueInstant,attr"`
-	AssertionArtifact string   `xml:"urn:oasis:names:tc:SAML:1.0:protocol AssertionArtifact"`
-}
-
 type samlResponse struct {
 	ResponseID   string        `xml:"ResponseID,attr"`
 	IssueInstant string        `xml:"IssueInstant,attr"`
