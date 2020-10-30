@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"log"
 	"sync"
 	"time"
 
@@ -50,6 +51,13 @@ func (m *NonceMap) evict(interval time.Duration) {
 // Gets a value in the map, or returns with false as the second value.
 // Deletes the item if it exists
 func (m *NonceMap) Use(nonce string) (interface{}, bool) {
+	log.Println("nonce map dump:")
+	m.internal.Range(func(key interface{}, value interface{}) bool {
+		remaining := time.Now().Unix() - value.(item).creationTime
+		log.Printf("'%s' -> '%s' (%d)\n", key.(string), value.(item).value, remaining)
+		return true
+	})
+
 	value, ok := m.internal.LoadAndDelete(nonce)
 	if ok {
 		// Make sure the item isn't invalid
