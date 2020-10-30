@@ -73,12 +73,11 @@ func NewProvider() (*Provider, error) {
 		<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/">
 			<SOAP-ENV:Header/>
 			<SOAP-ENV:Body>
-				<saml1p:Request xmlns:saml1p="urn:oasis:names:tc:SAML:1.0:protocol" MajorVersion="1" MinorVersion="1" RequestID="{{.RequestID}}" IssueInstant="{{.IssueInstant}}">
-					<saml1p:AssertionArtifact>{{.Ticket}}</saml1p:AssertionArtifact>
-				</saml1p:Request>
+				<samlp:Request xmlns:samlp="urn:oasis:names:tc:SAML:1.0:protocol" MajorVersion="1" MinorVersion="1" RequestID="{{.RequestID}}" IssueInstant="{{.IssueInstant}}">
+					<samlp:AssertionArtifact>{{.Ticket}}</samlp:AssertionArtifact>
+				</samlp:Request>
 			</SOAP-ENV:Body>
-		</SOAP-ENV:Envelope>
-		`)
+		</SOAP-ENV:Envelope>`)
 	if err != nil {
 		return nil, err
 	}
