@@ -46,6 +46,7 @@ func NewProvider() (*Provider, error) {
 func (c *Provider) Redirect(w http.ResponseWriter, r *http.Request) error {
 	// Get the redirect URL to the GT SSO service
 	redirectUrl, err := c.client.LoginUrlForRequest(r)
+	log.Println(redirectUrl)
 	if err != nil {
 		return err
 	}
@@ -58,6 +59,7 @@ func (c *Provider) Redirect(w http.ResponseWriter, r *http.Request) error {
 // parsing the body if successful
 func (c *Provider) ServiceValidate(r *http.Request, ticket string) (*cas.AuthenticationResponse, error) {
 	validateUrl, err := c.client.ServiceValidateUrlForRequest(ticket, r)
+	log.Println(validateUrl)
 	if err != nil {
 		return nil, err
 	}
