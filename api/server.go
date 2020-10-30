@@ -16,6 +16,7 @@ import (
 	"github.com/jd-116/klemis-kitchen-api/api/announcements"
 	apiAuth "github.com/jd-116/klemis-kitchen-api/api/auth"
 	"github.com/jd-116/klemis-kitchen-api/api/locations"
+	"github.com/jd-116/klemis-kitchen-api/api/memberships"
 	apiProducts "github.com/jd-116/klemis-kitchen-api/api/products"
 	"github.com/jd-116/klemis-kitchen-api/auth"
 	"github.com/jd-116/klemis-kitchen-api/cas"
@@ -172,6 +173,7 @@ func (a *APIServer) routes() *chi.Mux {
 		r.Mount("/announcements", announcements.Routes(a.dbProvider))
 		r.Mount("/products", apiProducts.Routes(a.dbProvider, a.itemProvider))
 		r.Mount("/locations", locations.Routes(a.dbProvider, a.itemProvider))
+		r.Mount("/memberships", memberships.Routes(a.dbProvider))
 	})
 
 	return router
