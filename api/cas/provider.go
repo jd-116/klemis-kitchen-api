@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/xml"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/url"
 	"path"
@@ -136,9 +135,6 @@ func (c *Provider) ServiceValidate(r *http.Request, ticket string) (*Identity, e
 	if err != nil {
 		return nil, err
 	}
-	log.Println()
-	log.Println(string(body))
-	log.Println()
 
 	// Make sure the request succeeded
 	if res.StatusCode != http.StatusOK {
@@ -151,10 +147,6 @@ func (c *Provider) ServiceValidate(r *http.Request, ticket string) (*Identity, e
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("%+v\n", soapResponse)
-	log.Println()
-	log.Printf("%#v\n", soapResponse)
-	log.Println()
 
 	// Make sure there is a Body
 	if len(soapResponse.Body.InnerXML) == 0 {
@@ -166,9 +158,6 @@ func (c *Provider) ServiceValidate(r *http.Request, ticket string) (*Identity, e
 	if err != nil {
 		return nil, err
 	}
-	log.Println()
-	log.Println(string(body))
-	log.Println()
 
 	// Make sure the validation succeeded
 	if !strings.HasSuffix(samlData.Status.StatusCode.Value, "Success") {
@@ -191,10 +180,6 @@ func (c *Provider) ServiceValidate(r *http.Request, ticket string) (*Identity, e
 			identity.FirstName = strings.TrimSpace(attribute.AttributeValue)
 		}
 	}
-	log.Printf("%+v\n", identity)
-	log.Println()
-	log.Printf("%#v\n", identity)
-	log.Println()
 
 	return &identity, nil
 }

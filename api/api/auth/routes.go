@@ -1,19 +1,24 @@
 package auth
 
 import (
+	"encoding/json"
 	"errors"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/dgrijalva/jwt-go"
 	"github.com/go-chi/chi"
 
 	"github.com/jd-116/klemis-kitchen-api/auth"
 	"github.com/jd-116/klemis-kitchen-api/cas"
 	"github.com/jd-116/klemis-kitchen-api/db"
+	"github.com/jd-116/klemis-kitchen-api/types"
 	"github.com/jd-116/klemis-kitchen-api/util"
 )
 
@@ -36,6 +41,11 @@ func Routes(casProvider *cas.Provider, database db.Provider, jwtManager *auth.JW
 	pollInterval := 2 * time.Minute
 	maxTTL := 10 * time.Minute
 	flowContinuation := NewNonceMap(pollInterval, int64(maxTTL/time.Second))
+
+	// Create the auth code nonce map
+	pollInterval = 3 * time.Minute
+	maxTTL = 5 * time.Minute
+	authCodes := NewNonceMap(pollInterval, int64(maxTTL/time.Second))
 
 	// Determine if the redirect URIs are valid using lambda
 	validRedirectURIPrefixes := []string{}
@@ -61,18 +71,30 @@ func Routes(casProvider *cas.Provider, database db.Provider, jwtManager *auth.JW
 		return false
 	}
 
+	// Try to see if the continuation cookies should be secure
+	var tokenExpirationHours *int64 = nil
+	if value, ok := os.LookupEnv("tokenExpirationHours"); ok {
+		valueInt, err := strconv.Atoi(value)
+		if err == nil {
+			valueInt64 := int64(valueInt)
+			tokenExpirationHours = &valueInt64
+		}
+	}
+
 	router := chi.NewRouter()
-	router.Get("/login", Login(casProvider, flowContinuation, cookieDomain,
-		secureContinuationCookies, isRedirectURIValid, database, jwtManager))
+	router.Get("/login", Login(casProvider, flowContinuation, authCodes, cookieDomain,
+		secureContinuationCookies, isRedirectURIValid, database, jwtManager,
+		tokenExpirationHours))
+	router.Post("/token-exchange", TokenExchange(authCodes, jwtManager))
+	router.Get("/session", Session(jwtManager))
 	return router
 }
 
 // Handles the GT SSO login flow via the CAS protocol v2
 func Login(casProvider *cas.Provider, flowContinuation *NonceMap,
-	cookieDomain string, secureContinuationCookies bool,
-	isRedirectURIValid func(string) bool,
-	membershipProvider db.MembershipProvider,
-	jwtManager *auth.JWTManager) http.HandlerFunc {
+	authCodes *NonceMap, cookieDomain string, secureContinuationCookies bool,
+	isRedirectURIValid func(string) bool, membershipProvider db.MembershipProvider,
+	jwtManager *auth.JWTManager, tokenExpirationHours *int64) http.HandlerFunc {
 
 	// Use a closure to inject dependencies
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -179,7 +201,17 @@ func Login(casProvider *cas.Provider, flowContinuation *NonceMap,
 
 			// They are a member, so construct a JWT from their membership
 			permissions := membership.Permissions()
-			token, err := jwtManager.IssueJWT(username, permissions, firstName, lastName)
+			session := types.Session{
+				Username:     username,
+				FirstName:    firstName,
+				LastName:     lastName,
+				IssuedAt:     time.Now(),
+				ExpiresAfter: tokenExpirationHours,
+			}
+			token := jwtManager.IssueJWT(session, permissions)
+
+			// Create the code nonce that can be exchanged for the JWT later
+			authCode, err := authCodes.Provision(token)
 			if err != nil {
 				util.Error(w, err)
 				return
@@ -188,13 +220,80 @@ func Login(casProvider *cas.Provider, flowContinuation *NonceMap,
 			// Remove the flow continuation cookie
 			removeCookie(w, FlowContinuationCookieName)
 
-			// Finally, redirect them to the redirect URI with the token
-			err = terminalRedirect(w, r, redirectURI, "token", token)
+			// Finally, redirect them to the redirect URI with a code
+			err = terminalRedirect(w, r, redirectURI, "code", authCode)
 			if err != nil {
 				util.Error(w, err)
 				return
 			}
 		}
+	}
+}
+
+// TokenExchangeResponse bundles together the token, the session, and the permissions
+type TokenExchangeResponse struct {
+	Token       string            `json:"token"`
+	Session     types.Session     `json:"session"`
+	Permissions types.Permissions `json:"permissions"`
+}
+
+// TokenExchange handles converting a code at the end of an auth flow
+// into a normal JWT
+func TokenExchange(authCodes *NonceMap, jwtManager *auth.JWTManager) func(w http.ResponseWriter, r *http.Request) {
+	// Use a closure to inject dependencies
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Read the auth code from the body of the request
+		authCodeBytes, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			util.Error(w, err)
+			return
+		}
+
+		// Look for the auth code in the map
+		rawToken, ok := authCodes.Use(string(authCodeBytes))
+		if !ok {
+			util.ErrorWithCode(w, errors.New("request had unknown auth code"),
+				http.StatusForbidden)
+			return
+		}
+		token, ok := rawToken.(*jwt.Token)
+		if !ok {
+			util.Error(w, errors.New("request had invalid flow continuation nonce value"))
+			return
+		}
+
+		// Sign the JWT and return it to the user
+		signed, err := jwtManager.SignToken(token)
+		if err != nil {
+			util.Error(w, err)
+			return
+		}
+
+		// Create the response object and send it to the user
+		claims := token.Claims.(*auth.Claims)
+		responseData := TokenExchangeResponse{
+			Token:       signed,
+			Session:     *claims.Session(),
+			Permissions: claims.Permissions,
+		}
+		jsonResponse, err := json.Marshal(responseData)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(jsonResponse)
+	}
+}
+
+// Session returns the inner data of the user's session by reading their JWT
+// and validating it
+func Session(jwtManager *auth.JWTManager) func(w http.ResponseWriter, r *http.Request) {
+	// Use a closure to inject dependencies
+	return func(w http.ResponseWriter, r *http.Request) {
+		// TODO implement
 	}
 }
 
