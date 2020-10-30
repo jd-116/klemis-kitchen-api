@@ -146,7 +146,7 @@ func (c *Provider) ServiceValidate(r *http.Request, ticket string) (*cas.Authent
 
 	// Try to parse the response body
 	body, err := ioutil.ReadAll(res.Body)
-	log.Println(body)
+	log.Println(string(body))
 	authResponse, err := cas.ParseServiceResponse(body)
 	if err != nil {
 		return nil, err

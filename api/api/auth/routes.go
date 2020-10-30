@@ -139,7 +139,6 @@ func Login(casProvider *cas.Provider, flowContinuation *NonceMap,
 			}
 
 			// Extract the original redirect URI from the flow continuation nonce
-			log.Printf("cookie with request: '%s\n", flowContinuationCookie.Value)
 			redirectURIRaw, ok := flowContinuation.Use(flowContinuationCookie.Value)
 			if !ok {
 				util.ErrorWithCode(w, errors.New("request had unknown flow continuation nonce"),
