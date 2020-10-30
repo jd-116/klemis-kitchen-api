@@ -108,6 +108,11 @@ func Login(casProvider *cas.Provider, flowContinuation *FlowContinuationMap,
 			flowContinuationIdStr := flowContinuationId.String()
 			flowContinuation.Put(flowContinuationIdStr, redirectURI)
 
+			// Remove the redirect URI parameter from the URL
+			query := r.URL.Query()
+			query.Del("redirect_uri")
+			r.URL.RawQuery = query.Encode()
+
 			// Get the URL to redirect to GT SSO
 			err = casProvider.Redirect(w, r)
 			if err != nil {
