@@ -104,6 +104,7 @@ func Login(casProvider *cas.Provider, flowContinuation *FlowContinuationMap,
 			flowContinuationId, err := ksuid.NewRandom()
 			if err != nil {
 				util.Error(w, err)
+				return
 			}
 			flowContinuationIdStr := flowContinuationId.String()
 			flowContinuation.Put(flowContinuationIdStr, redirectURI)
@@ -112,12 +113,6 @@ func Login(casProvider *cas.Provider, flowContinuation *FlowContinuationMap,
 			query := r.URL.Query()
 			query.Del("redirect_uri")
 			r.URL.RawQuery = query.Encode()
-
-			// Get the URL to redirect to GT SSO
-			err = casProvider.Redirect(w, r)
-			if err != nil {
-				util.Error(w, err)
-			}
 
 			// Include the flow continuation cookie
 			ttl := 5 * time.Minute
@@ -134,6 +129,13 @@ func Login(casProvider *cas.Provider, flowContinuation *FlowContinuationMap,
 			}
 			log.Println(cookie.String())
 			http.SetCookie(w, &cookie)
+
+			// Get the URL to redirect to GT SSO
+			err = casProvider.Redirect(w, r)
+			if err != nil {
+				util.Error(w, err)
+				return
+			}
 		} else {
 			// First, make sure the flow came from us originally
 			// by looking for the flow continuation cookie
@@ -157,6 +159,7 @@ func Login(casProvider *cas.Provider, flowContinuation *FlowContinuationMap,
 			result, err := casProvider.ServiceValidate(r, ticket)
 			if err != nil {
 				util.Error(w, err)
+				return
 			}
 
 			log.Printf("handling authentication for '%s' at the end of CAS flow\n", result.User)
@@ -189,6 +192,7 @@ func Login(casProvider *cas.Provider, flowContinuation *FlowContinuationMap,
 			err = terminalRedirect(w, r, redirectURI, "token", token)
 			if err != nil {
 				util.Error(w, err)
+				return
 			}
 		}
 	}
