@@ -12,17 +12,102 @@ import (
 	"github.com/go-chi/render"
 
 	"github.com/jd-116/klemis-kitchen-api/api/announcements"
+	"github.com/jd-116/klemis-kitchen-api/api/auth"
 	"github.com/jd-116/klemis-kitchen-api/api/locations"
 	apiProducts "github.com/jd-116/klemis-kitchen-api/api/products"
-	"github.com/jd-116/klemis-kitchen-api/db"
-	"github.com/jd-116/klemis-kitchen-api/products"
+	"github.com/jd-116/klemis-kitchen-api/cas"
+	"github.com/jd-116/klemis-kitchen-api/db/mongo"
+	"github.com/jd-116/klemis-kitchen-api/products/transact"
 )
 
-// ServeAPI runs the main API server until it's cancelled for some reason,
+// APIServer is a struct that bundles together the various server-wide
+// resources used at runtime that each have
+// a lifecycle of initialization, connection, and disconnection
+type APIServer struct {
+	itemProvider *transact.Provider
+	dbProvider   *mongo.Provider
+	casProvider  *cas.Provider
+}
+
+// NewAPIServer initializes the struct and all constituent components
+func NewAPIServer() (*APIServer, error) {
+	// Initialize the Transact scraper
+	itemProvider, err := transact.NewProvider()
+	if err != nil {
+		return nil, err
+	}
+
+	// Initialize the MongoDB handler
+	dbProvider, err := mongo.NewProvider()
+	if err != nil {
+		return nil, err
+	}
+
+	// Initialize the CAS provider
+	casProvider, err := cas.NewProvider()
+	if err != nil {
+		return nil, err
+	}
+
+	return &APIServer{
+		itemProvider,
+		dbProvider,
+		casProvider,
+	}, nil
+}
+
+// Connect initializes the struct and all constituent components
+func (a *APIServer) Connect(ctx context.Context) error {
+	// Start the Transact scraper goroutines
+	log.Println("initializing Transact API connector")
+	err := a.itemProvider.Connect(ctx)
+	if err != nil {
+		log.Println("could not authenticate with the Transact API")
+		return err
+	} else {
+		log.Printf("successfully authenticated with the Transact API version %s\n",
+			a.itemProvider.Scraper.ClientVersion)
+	}
+
+	// Connect to the MongoDB database
+	log.Println("initializing MongoDB database provider")
+	err = a.dbProvider.Connect(ctx)
+	if err != nil {
+		log.Println("could not disconnect to the database")
+		return err
+	} else {
+		log.Println("successfully connected to and pinged the database")
+	}
+
+	return nil
+}
+
+// Disconnect initializes the struct and all constituent components
+func (a *APIServer) Disconnect(ctx context.Context) error {
+	err := a.dbProvider.Disconnect(ctx)
+	if err != nil {
+		log.Println("could not disconnect from the database")
+		return err
+	} else {
+		log.Println("disconnected from the database")
+	}
+
+	err = a.itemProvider.Disconnect(ctx)
+	if err != nil {
+		log.Println("could not disconnect from the Transact API")
+		return err
+	} else {
+		log.Println("disconnected from the Transact API")
+	}
+
+	return nil
+}
+
+// Serve runs the main API server until it's cancelled for some reason,
 // in which case it attempts to gracefully shutdown.
 // This function blocks.
-func ServeAPI(ctx context.Context, port int, database db.Provider, products products.Provider) {
-	router := routes(database, products)
+func (a *APIServer) Serve(ctx context.Context, port int) {
+	router := a.routes()
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", port),
 		Handler: router,
@@ -49,7 +134,8 @@ func ServeAPI(ctx context.Context, port int, database db.Provider, products prod
 	log.Println("API server exited properly")
 }
 
-func routes(database db.Provider, products products.Provider) *chi.Mux {
+// routes initializes the chi Mux
+func (a *APIServer) routes() *chi.Mux {
 	// Approach from:
 	// https://itnext.io/structuring-a-production-grade-rest-api-in-golang-c0229b3feedc
 	// https://itnext.io/how-i-pass-around-shared-resources-databases-configuration-etc-within-golang-projects-b27af4d8e8a
@@ -71,9 +157,10 @@ func routes(database db.Provider, products products.Provider) *chi.Mux {
 			w.WriteHeader(204)
 		})
 
-		r.Mount("/announcements", announcements.Routes(database))
-		r.Mount("/products", apiProducts.Routes(database, products))
-		r.Mount("/locations", locations.Routes(database, products))
+		r.Mount("/auth", auth.Routes(a.casProvider))
+		r.Mount("/announcements", announcements.Routes(a.dbProvider))
+		r.Mount("/products", apiProducts.Routes(a.dbProvider, a.itemProvider))
+		r.Mount("/locations", locations.Routes(a.dbProvider, a.itemProvider))
 	})
 
 	return router

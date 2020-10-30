@@ -255,13 +255,15 @@ func Create(database db.Provider) http.HandlerFunc {
 
 		location.ID = strings.TrimSpace(location.ID)
 		if location.ID == "" {
-			util.Error(w, errors.New("location ID cannot be empty"))
+			util.ErrorWithCode(w, errors.New("location ID cannot be empty"),
+				http.StatusBadRequest)
 			return
 		}
 
 		location.Name = strings.TrimSpace(location.Name)
 		if location.Name == "" {
-			util.Error(w, errors.New("location Name cannot be empty"))
+			util.ErrorWithCode(w, errors.New("location Name cannot be empty"),
+				http.StatusBadRequest)
 			return
 		}
 

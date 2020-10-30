@@ -10,4 +10,5 @@ require (
 	github.com/lithammer/fuzzysearch v1.1.1
 	go.mongodb.org/mongo-driver v1.4.0
 	golang.org/x/net v0.0.0-20200421231249-e086a090c8fd
+	gopkg.in/cas.v2 v2.2.0
 )

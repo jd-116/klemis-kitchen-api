@@ -90,7 +90,8 @@ func Create(database db.Provider) http.HandlerFunc {
 
 		announcement.ID = strings.TrimSpace(announcement.ID)
 		if announcement.ID == "" {
-			util.Error(w, errors.New("announcement ID cannot be empty"))
+			util.ErrorWithCode(w, errors.New("announcement ID cannot be empty"),
+				http.StatusBadRequest)
 			return
 		}
 
