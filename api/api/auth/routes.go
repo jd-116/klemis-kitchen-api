@@ -124,10 +124,10 @@ func Login(casProvider *cas.Provider, flowContinuation *FlowContinuationMap,
 				HttpOnly: true,
 				Path:     "/",
 				Domain:   cookieDomain,
-				SameSite: http.SameSiteStrictMode,
+				// Cookie needs to be Lax so it is send when CAS redirects
+				SameSite: http.SameSiteLaxMode,
 				Expires:  expire,
 			}
-			log.Println(cookie.String())
 			http.SetCookie(w, &cookie)
 
 			// Get the URL to redirect to GT SSO
@@ -188,6 +188,9 @@ func Login(casProvider *cas.Provider, flowContinuation *FlowContinuationMap,
 				return
 			}
 
+			// Remove the flow continuation cookie
+			removeCookie(w, FlowContinuationCookieName)
+
 			// Finally, redirect them to the redirect URI with the token
 			err = terminalRedirect(w, r, redirectURI, "token", token)
 			if err != nil {
@@ -219,4 +222,15 @@ func terminalRedirect(w http.ResponseWriter, r *http.Request,
 
 	http.Redirect(w, r, u.String(), http.StatusFound)
 	return nil
+}
+
+// removeCookie sets a cookie with an empty value
+func removeCookie(w http.ResponseWriter, name string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "storage",
+		Value:    "",
+		Path:     "/",
+		Expires:  time.Unix(0, 0),
+		HttpOnly: true,
+	})
 }
