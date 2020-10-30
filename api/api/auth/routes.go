@@ -153,16 +153,16 @@ func Login(casProvider *cas.Provider, flowContinuation *NonceMap,
 
 			// This is the second part of the CAS flow,
 			// send a request to the CAS server to validate the ticket
-			result, err := casProvider.ServiceValidate(r, ticket)
+			identity, err := casProvider.ServiceValidate(r, ticket)
 			if err != nil {
 				util.Error(w, err)
 				return
 			}
 
-			log.Printf("handling authentication for '%s' at the end of CAS flow\n", result.User)
-			username := result.User
-			first_name := "Fix"
-			last_name := "Me"
+			username := identity.Username
+			firstName := identity.FirstName
+			lastName := identity.LastName
+			log.Printf("handling authentication for '%s' at the end of CAS flow\n", username)
 
 			// Determine whether the user is a member or not,
 			// and if so, what level of access they have
@@ -179,7 +179,7 @@ func Login(casProvider *cas.Provider, flowContinuation *NonceMap,
 
 			// They are a member, so construct a JWT from their membership
 			permissions := membership.Permissions()
-			token, err := jwtManager.IssueJWT(username, permissions, first_name, last_name)
+			token, err := jwtManager.IssueJWT(username, permissions, firstName, lastName)
 			if err != nil {
 				util.Error(w, err)
 				return
