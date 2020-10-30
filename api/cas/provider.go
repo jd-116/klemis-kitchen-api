@@ -51,7 +51,7 @@ func (c *Provider) Redirect(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	http.Redirect(w, r, redirectUrl, http.StatusFound)
+	http.Redirect(w, r, redirectUrl, http.StatusSeeOther)
 	return nil
 }
 

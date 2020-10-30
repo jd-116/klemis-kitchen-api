@@ -20,27 +20,29 @@ import (
 // at the root level
 func Routes(database db.Provider, products products.Provider) *chi.Mux {
 	router := chi.NewRouter()
-	router.Get("/", GetAll(database, products))
-	router.Get("/{id}", GetSingle(database, products))
+	router.Get("/", GetAll(database, database, products))
+	router.Get("/{id}", GetSingle(database, database, products))
 	return router
 }
 
 // GetAll gets all products from the database,
 // with an optional search querystring param
-func GetAll(database db.Provider, cacheProducts products.Provider) http.HandlerFunc {
+func GetAll(productMetadataProvider db.ProductMetadataProvider, locationProvider db.LocationProvider,
+	cacheProducts products.Provider) http.HandlerFunc {
+
 	// Use a closure to inject the database provider
 	return func(w http.ResponseWriter, r *http.Request) {
 		// See if we have search parameter,
 		// which can be empty
 		search := strings.ToLower(r.URL.Query().Get("search"))
 
-		dbLocations, err := database.GetAllLocations(r.Context())
+		dbLocations, err := locationProvider.GetAllLocations(r.Context())
 		if err != nil {
 			util.Error(w, err)
 			return
 		}
 
-		dbProducts, err := database.GetAllProducts(r.Context())
+		dbProducts, err := productMetadataProvider.GetAllProducts(r.Context())
 		if err != nil {
 			util.Error(w, err)
 			return
@@ -141,7 +143,9 @@ type productsData struct {
 }
 
 // GetSingle gets a single product from the database by its ID
-func GetSingle(database db.Provider, cacheProducts products.Provider) http.HandlerFunc {
+func GetSingle(productMetadataProvider db.ProductMetadataProvider, locationProvider db.LocationProvider,
+	cacheProducts products.Provider) http.HandlerFunc {
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		if id == "" {
@@ -150,7 +154,7 @@ func GetSingle(database db.Provider, cacheProducts products.Provider) http.Handl
 			return
 		}
 
-		productMetadata, err := database.GetProduct(r.Context(), id)
+		productMetadata, err := productMetadataProvider.GetProduct(r.Context(), id)
 		if err != nil {
 			// Continue with partial product
 			productMetadata = nil
@@ -162,7 +166,7 @@ func GetSingle(database db.Provider, cacheProducts products.Provider) http.Handl
 			return
 		}
 
-		dbLocations, err := database.GetAllLocations(r.Context())
+		dbLocations, err := locationProvider.GetAllLocations(r.Context())
 		if err != nil {
 			util.Error(w, err)
 			return

@@ -14,6 +14,7 @@ type Provider interface {
 	AnnouncementProvider
 	ProductMetadataProvider
 	LocationProvider
+	MembershipProvider
 }
 
 // AnnouncementProvider provides CRUD operations for type.Announcement structs
@@ -41,4 +42,13 @@ type LocationProvider interface {
 	CreateLocation(ctx context.Context, location types.Location) error
 	DeleteLocation(ctx context.Context, id string) error
 	UpdateLocation(ctx context.Context, id string, update map[string]interface{}) (*types.Location, error)
+}
+
+// MembershipProvider provides CRUD operations for type.Membership structs
+type MembershipProvider interface {
+	GetMembership(ctx context.Context, username string) (*types.Membership, error)
+	GetAllMemberships(ctx context.Context) ([]types.Membership, error)
+	CreateMembership(ctx context.Context, membership types.Membership) error
+	DeleteMembership(ctx context.Context, username string) error
+	UpdateMembership(ctx context.Context, username string, update map[string]interface{}) (*types.Membership, error)
 }

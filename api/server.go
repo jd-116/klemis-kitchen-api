@@ -5,16 +5,19 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
+	"github.com/go-chi/cors"
 	"github.com/go-chi/render"
 
 	"github.com/jd-116/klemis-kitchen-api/api/announcements"
-	"github.com/jd-116/klemis-kitchen-api/api/auth"
+	apiAuth "github.com/jd-116/klemis-kitchen-api/api/auth"
 	"github.com/jd-116/klemis-kitchen-api/api/locations"
 	apiProducts "github.com/jd-116/klemis-kitchen-api/api/products"
+	"github.com/jd-116/klemis-kitchen-api/auth"
 	"github.com/jd-116/klemis-kitchen-api/cas"
 	"github.com/jd-116/klemis-kitchen-api/db/mongo"
 	"github.com/jd-116/klemis-kitchen-api/products/transact"
@@ -27,6 +30,7 @@ type APIServer struct {
 	itemProvider *transact.Provider
 	dbProvider   *mongo.Provider
 	casProvider  *cas.Provider
+	jwtManager   *auth.JWTManager
 }
 
 // NewAPIServer initializes the struct and all constituent components
@@ -49,10 +53,17 @@ func NewAPIServer() (*APIServer, error) {
 		return nil, err
 	}
 
+	// Initialize the JWT manager
+	jwtManager, err := auth.NewJWTManager()
+	if err != nil {
+		return nil, err
+	}
+
 	return &APIServer{
 		itemProvider,
 		dbProvider,
 		casProvider,
+		jwtManager,
 	}, nil
 }
 
@@ -134,7 +145,6 @@ func (a *APIServer) Serve(ctx context.Context, port int) {
 	log.Println("API server exited properly")
 }
 
-// routes initializes the chi Mux
 func (a *APIServer) routes() *chi.Mux {
 	// Approach from:
 	// https://itnext.io/structuring-a-production-grade-rest-api-in-golang-c0229b3feedc
@@ -145,7 +155,8 @@ func (a *APIServer) routes() *chi.Mux {
 		middleware.Logger,          // Log API request calls
 		middleware.Compress(5),     // Compress results, mostly gzipping assets and json
 		middleware.RedirectSlashes, // Redirect slashes to no slash URL versions
-		middleware.Recoverer,       // Recover from panics without crashing the server
+		middleware.Recoverer,       // Recover from panics without crashing the server // Basic CORS
+		a.corsMiddleware(),         // Create cors middleware from go-chi/cors
 	)
 
 	// ==============================
@@ -157,11 +168,28 @@ func (a *APIServer) routes() *chi.Mux {
 			w.WriteHeader(204)
 		})
 
-		r.Mount("/auth", auth.Routes(a.casProvider))
+		r.Mount("/auth", apiAuth.Routes(a.casProvider, a.dbProvider, a.jwtManager))
 		r.Mount("/announcements", announcements.Routes(a.dbProvider))
 		r.Mount("/products", apiProducts.Routes(a.dbProvider, a.itemProvider))
 		r.Mount("/locations", locations.Routes(a.dbProvider, a.itemProvider))
 	})
 
 	return router
+}
+
+func (a *APIServer) corsMiddleware() func(http.Handler) http.Handler {
+	// See if the CORS_ALLOWED_ORIGINS environment variable was set
+	allowedOrigins := "*"
+	if value, ok := os.LookupEnv("CORS_ALLOWED_ORIGINS"); ok {
+		allowedOrigins = value
+	}
+
+	return cors.Handler(cors.Options{
+		AllowedOrigins:   []string{allowedOrigins},
+		AllowedMethods:   []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
+		ExposedHeaders:   []string{},
+		AllowCredentials: false,
+		MaxAge:           300,
+	})
 }

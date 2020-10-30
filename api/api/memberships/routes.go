@@ -1,4 +1,4 @@
-package announcements
+package memberships
 
 import (
 	"encoding/json"
@@ -13,23 +13,23 @@ import (
 	"github.com/jd-116/klemis-kitchen-api/util"
 )
 
-// Routes creates a new Chi router with all of the routes for the announcement resource,
+// Routes creates a new Chi router with all of the routes for the membership resource,
 // at the root level
 func Routes(database db.Provider) *chi.Mux {
 	router := chi.NewRouter()
 	router.Get("/", GetAll(database))
-	router.Get("/{id}", GetSingle(database))
+	router.Get("/{username}", GetSingle(database))
 	router.Post("/", Create(database))
-	router.Delete("/{id}", Delete(database))
+	router.Delete("/{username}", Delete(database))
 	router.Patch("/", Update(database))
 	return router
 }
 
-// GetAll gets all announcements from the database
-func GetAll(announcementProvider db.AnnouncementProvider) http.HandlerFunc {
+// GetAll gets all memberships from the database
+func GetAll(membershipProvider db.MembershipProvider) http.HandlerFunc {
 	// Use a closure to inject the database provider
 	return func(w http.ResponseWriter, r *http.Request) {
-		announcements, err := announcementProvider.GetAllAnnouncements(r.Context())
+		memberships, err := membershipProvider.GetAllMemberships(r.Context())
 		if err != nil {
 			util.Error(w, err)
 			return
@@ -37,7 +37,7 @@ func GetAll(announcementProvider db.AnnouncementProvider) http.HandlerFunc {
 
 		// Return the list in a JSON object
 		jsonResponse, err := json.Marshal(map[string]interface{}{
-			"announcements": announcements,
+			"memberships": memberships,
 		})
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -50,24 +50,24 @@ func GetAll(announcementProvider db.AnnouncementProvider) http.HandlerFunc {
 	}
 }
 
-// GetSingle gets a single announcement from the database by its ID
-func GetSingle(announcementProvider db.AnnouncementProvider) http.HandlerFunc {
+// GetSingle gets a single membership from the database by its username
+func GetSingle(membershipProvider db.MembershipProvider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id := chi.URLParam(r, "id")
-		if id == "" {
+		username := chi.URLParam(r, "username")
+		if username == "" {
 			util.ErrorWithCode(w, errors.New("the URL parameter is empty"),
 				http.StatusBadRequest)
 			return
 		}
 
-		announcement, err := announcementProvider.GetAnnouncement(r.Context(), id)
+		membership, err := membershipProvider.GetMembership(r.Context(), username)
 		if err != nil {
 			util.Error(w, err)
 			return
 		}
 
-		// Return the single announcement as the top-level JSON
-		jsonResponse, err := json.Marshal(announcement)
+		// Return the single membership as the top-level JSON
+		jsonResponse, err := json.Marshal(membership)
 		if err != nil {
 			util.ErrorWithCode(w, err, http.StatusInternalServerError)
 			return
@@ -79,31 +79,31 @@ func GetSingle(announcementProvider db.AnnouncementProvider) http.HandlerFunc {
 	}
 }
 
-// Create creates a new announcement in the database
-func Create(announcementProvider db.AnnouncementProvider) http.HandlerFunc {
+// Create creates a new membership in the database
+func Create(membershipProvider db.MembershipProvider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var announcement types.Announcement
-		err := json.NewDecoder(r.Body).Decode(&announcement)
+		var membership types.Membership
+		err := json.NewDecoder(r.Body).Decode(&membership)
 		if err != nil {
 			util.Error(w, err)
 			return
 		}
 
-		announcement.ID = strings.TrimSpace(announcement.ID)
-		if announcement.ID == "" {
-			util.ErrorWithCode(w, errors.New("announcement ID cannot be empty"),
+		membership.Username = strings.TrimSpace(membership.Username)
+		if membership.Username == "" {
+			util.ErrorWithCode(w, errors.New("membership Username cannot be empty"),
 				http.StatusBadRequest)
 			return
 		}
 
-		err = announcementProvider.CreateAnnouncement(r.Context(), announcement)
+		err = membershipProvider.CreateMembership(r.Context(), membership)
 		if err != nil {
 			util.Error(w, err)
 			return
 		}
 
-		// Return the single announcement as the top-level JSON
-		jsonResponse, err := json.Marshal(announcement)
+		// Return the single membership as the top-level JSON
+		jsonResponse, err := json.Marshal(membership)
 		if err != nil {
 			util.ErrorWithCode(w, err, http.StatusInternalServerError)
 			return
@@ -115,17 +115,17 @@ func Create(announcementProvider db.AnnouncementProvider) http.HandlerFunc {
 	}
 }
 
-// Delete deletes a announcement in the database
-func Delete(announcementProvider db.AnnouncementProvider) http.HandlerFunc {
+// Delete deletes a membership in the database
+func Delete(membershipProvider db.MembershipProvider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id := chi.URLParam(r, "id")
-		if id == "" {
+		username := chi.URLParam(r, "username")
+		if username == "" {
 			util.ErrorWithCode(w, errors.New("the URL parameter is empty"),
 				http.StatusBadRequest)
 			return
 		}
 
-		err := announcementProvider.DeleteAnnouncement(r.Context(), id)
+		err := membershipProvider.DeleteMembership(r.Context(), username)
 		if err != nil {
 			util.Error(w, err)
 			return
@@ -135,11 +135,11 @@ func Delete(announcementProvider db.AnnouncementProvider) http.HandlerFunc {
 	}
 }
 
-// Update updates a announcement in the database
-func Update(announcementProvider db.AnnouncementProvider) http.HandlerFunc {
+// Update updates a membership in the database
+func Update(membershipProvider db.MembershipProvider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id := chi.URLParam(r, "id")
-		if id == "" {
+		username := chi.URLParam(r, "username")
+		if username == "" {
 			util.ErrorWithCode(w, errors.New("the URL parameter is empty"),
 				http.StatusBadRequest)
 			return
@@ -152,13 +152,13 @@ func Update(announcementProvider db.AnnouncementProvider) http.HandlerFunc {
 			return
 		}
 
-		updated, err := announcementProvider.UpdateAnnouncement(r.Context(), id, partial)
+		updated, err := membershipProvider.UpdateMembership(r.Context(), username, partial)
 		if err != nil {
 			util.Error(w, err)
 			return
 		}
 
-		// Return the updated announcement as the top-level JSON
+		// Return the updated membership as the top-level JSON
 		jsonResponse, err := json.Marshal(updated)
 		if err != nil {
 			util.ErrorWithCode(w, err, http.StatusInternalServerError)

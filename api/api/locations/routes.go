@@ -22,8 +22,8 @@ func Routes(database db.Provider, products products.Provider) *chi.Mux {
 	router := chi.NewRouter()
 	router.Get("/", GetAll(database))
 	router.Get("/{id}", GetSingle(database))
-	router.Get("/{id}/products", GetProducts(database, products))
-	router.Get("/{id}/products/{product_id}", GetProduct(database, products))
+	router.Get("/{id}/products", GetProducts(database, database, products))
+	router.Get("/{id}/products/{product_id}", GetProduct(database, database, products))
 	router.Post("/", Create(database))
 	router.Delete("/{id}", Delete(database))
 	router.Patch("/", Update(database))
@@ -31,10 +31,10 @@ func Routes(database db.Provider, products products.Provider) *chi.Mux {
 }
 
 // GetAll gets all locations from the database
-func GetAll(database db.Provider) http.HandlerFunc {
+func GetAll(locationProvider db.LocationProvider) http.HandlerFunc {
 	// Use a closure to inject the database provider
 	return func(w http.ResponseWriter, r *http.Request) {
-		locations, err := database.GetAllLocations(r.Context())
+		locations, err := locationProvider.GetAllLocations(r.Context())
 		if err != nil {
 			util.Error(w, err)
 			return
@@ -77,7 +77,7 @@ func GetAll(database db.Provider) http.HandlerFunc {
 }
 
 // GetSingle gets a single location from the database by its ID
-func GetSingle(database db.Provider) http.HandlerFunc {
+func GetSingle(locationProvider db.LocationProvider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		if id == "" {
@@ -86,7 +86,7 @@ func GetSingle(database db.Provider) http.HandlerFunc {
 			return
 		}
 
-		location, err := database.GetLocation(r.Context(), id)
+		location, err := locationProvider.GetLocation(r.Context(), id)
 		if err != nil {
 			util.Error(w, err)
 			return
@@ -108,7 +108,9 @@ func GetSingle(database db.Provider) http.HandlerFunc {
 
 // GetProducts gets all products that exist at this location,
 // with an optional search querystring param
-func GetProducts(database db.Provider, products products.Provider) http.HandlerFunc {
+func GetProducts(locationProvider db.LocationProvider, productMetadataProvider db.ProductMetadataProvider,
+	products products.Provider) http.HandlerFunc {
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		if id == "" {
@@ -121,7 +123,7 @@ func GetProducts(database db.Provider, products products.Provider) http.HandlerF
 		// which can be empty
 		search := strings.ToLower(r.URL.Query().Get("search"))
 
-		dbLocation, err := database.GetLocation(r.Context(), id)
+		dbLocation, err := locationProvider.GetLocation(r.Context(), id)
 		if err != nil {
 			util.Error(w, err)
 			return
@@ -132,7 +134,7 @@ func GetProducts(database db.Provider, products products.Provider) http.HandlerF
 			util.Error(w, err)
 		}
 
-		dbProducts, err := database.GetAllProducts(r.Context())
+		dbProducts, err := productMetadataProvider.GetAllProducts(r.Context())
 		if err != nil {
 			util.Error(w, err)
 		}
@@ -188,7 +190,9 @@ func GetProducts(database db.Provider, products products.Provider) http.HandlerF
 }
 
 // GetProduct gets a single product at this location
-func GetProduct(database db.Provider, products products.Provider) http.HandlerFunc {
+func GetProduct(locationProvider db.LocationProvider, productMetadataProvider db.ProductMetadataProvider,
+	products products.Provider) http.HandlerFunc {
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		locationID := chi.URLParam(r, "id")
 		if locationID == "" {
@@ -204,7 +208,7 @@ func GetProduct(database db.Provider, products products.Provider) http.HandlerFu
 			return
 		}
 
-		dbLocation, err := database.GetLocation(r.Context(), locationID)
+		dbLocation, err := locationProvider.GetLocation(r.Context(), locationID)
 		if err != nil {
 			util.Error(w, err)
 			return
@@ -225,7 +229,7 @@ func GetProduct(database db.Provider, products products.Provider) http.HandlerFu
 		}
 
 		// See if this has a corresponding DB product object
-		if dbProduct, err := database.GetProduct(r.Context(), productID); err == nil {
+		if dbProduct, err := productMetadataProvider.GetProduct(r.Context(), productID); err == nil {
 			resultProduct.Nutrition = dbProduct.Nutrition
 			resultProduct.Thumbnail = dbProduct.Thumbnail
 		}
@@ -244,7 +248,7 @@ func GetProduct(database db.Provider, products products.Provider) http.HandlerFu
 }
 
 // Create creates a new location in the database
-func Create(database db.Provider) http.HandlerFunc {
+func Create(locationProvider db.LocationProvider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var location types.Location
 		err := json.NewDecoder(r.Body).Decode(&location)
@@ -267,7 +271,7 @@ func Create(database db.Provider) http.HandlerFunc {
 			return
 		}
 
-		err = database.CreateLocation(r.Context(), location)
+		err = locationProvider.CreateLocation(r.Context(), location)
 		if err != nil {
 			util.Error(w, err)
 			return
@@ -287,7 +291,7 @@ func Create(database db.Provider) http.HandlerFunc {
 }
 
 // Delete deletes a location in the database
-func Delete(database db.Provider) http.HandlerFunc {
+func Delete(locationProvider db.LocationProvider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		if id == "" {
@@ -296,7 +300,7 @@ func Delete(database db.Provider) http.HandlerFunc {
 			return
 		}
 
-		err := database.DeleteLocation(r.Context(), id)
+		err := locationProvider.DeleteLocation(r.Context(), id)
 		if err != nil {
 			util.Error(w, err)
 			return
@@ -307,7 +311,7 @@ func Delete(database db.Provider) http.HandlerFunc {
 }
 
 // Update updates a location in the database
-func Update(database db.Provider) http.HandlerFunc {
+func Update(locationProvider db.LocationProvider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		if id == "" {
@@ -323,7 +327,7 @@ func Update(database db.Provider) http.HandlerFunc {
 			return
 		}
 
-		updated, err := database.UpdateLocation(r.Context(), id, partial)
+		updated, err := locationProvider.UpdateLocation(r.Context(), id, partial)
 		if err != nil {
 			util.Error(w, err)
 			return
