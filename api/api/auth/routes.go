@@ -122,10 +122,12 @@ func Login(casProvider *cas.Provider, flowContinuation *FlowContinuationMap,
 				Value:    flowContinuationIdStr,
 				Secure:   secureContinuationCookies,
 				HttpOnly: true,
+				Path:     "/",
 				Domain:   cookieDomain,
 				SameSite: http.SameSiteStrictMode,
 				Expires:  expire,
 			}
+			log.Println(cookie.String())
 			http.SetCookie(w, &cookie)
 		} else {
 			// First, make sure the flow came from us originally
