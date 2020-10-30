@@ -81,7 +81,7 @@ func (m *NonceMap) Provision(value interface{}) (string, error) {
 		}
 
 		nonceStr := nonce.String()
-		_, exists := m.internal.LoadOrStore(nonce, newItem)
+		_, exists := m.internal.LoadOrStore(nonceStr, newItem)
 		if !exists {
 			return nonceStr, nil
 		}
