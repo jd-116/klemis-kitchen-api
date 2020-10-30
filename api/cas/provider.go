@@ -32,7 +32,7 @@ type samlValidateArguments struct {
 }
 
 type soapEnvelope struct {
-	XMLName xml.Name    `xml:"http://schemas.xmlsoap.org/soap/envelope/ Enelope"`
+	XMLName xml.Name    `xml:"http://schemas.xmlsoap.org/soap/envelope/ Envelope"`
 	Body    soapBody    `xml:"http://schemas.xmlsoap.org/soap/envelope/ Body"`
 	Header  *soapHeader `xml:"http://schemas.xmlsoap.org/soap/envelope/ Header"`
 }
