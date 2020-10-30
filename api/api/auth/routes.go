@@ -1,7 +1,7 @@
 package auth
 
 import (
-	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/go-chi/chi"
@@ -41,9 +41,10 @@ func Login(casProvider *cas.Provider) http.HandlerFunc {
 				util.Error(w, err)
 			}
 
-			// TODO implement consuming the response
-			fmt.Printf("got response with: %+v", result)
-			fmt.Printf("                 : %#v", result)
+			user := result.User
+			log.Printf("handling authentication for '%s' at the end of CAS flow\n", user)
+
+			// TODO consume and issue JWT
 		}
 	}
 }

@@ -78,10 +78,6 @@ func (c *Provider) ServiceValidate(r *http.Request, ticket string) (*cas.Authent
 		return nil, err
 	}
 	defer res.Body.Close()
-	body, err := ioutil.ReadAll(res.Body)
-	log.Println()
-	log.Println(string(body))
-	log.Println()
 
 	// Make sure the request succeeded
 	if res.StatusCode != http.StatusOK {
@@ -89,7 +85,7 @@ func (c *Provider) ServiceValidate(r *http.Request, ticket string) (*cas.Authent
 	}
 
 	// Try to parse the response body
-	// body, err := ioutil.ReadAll(res.Body)
+	body, err := ioutil.ReadAll(res.Body)
 	authResponse, err := cas.ParseServiceResponse(body)
 	if err != nil {
 		return nil, err
