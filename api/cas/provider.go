@@ -2,6 +2,7 @@ package cas
 
 import (
 	"bytes"
+	"encoding/xml"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -30,6 +31,31 @@ type samlValidateArguments struct {
 	Ticket       string
 }
 
+type soapEnvelope struct {
+	XMLName xml.Name    `xml:"http://schemas.xmlsoap.org/soap/envelope/ Enelope"`
+	Body    soapBody    `xml:"http://schemas.xmlsoap.org/soap/envelope/ Body"`
+	Header  *soapHeader `xml:"http://schemas.xmlsoap.org/soap/envelope/ Header"`
+}
+
+type soapHeader struct {
+	XMLName xml.Name `xml:"http://schemas.xmlsoap.org/soap/envelope/ Header"`
+}
+
+type soapBody struct {
+	XMLName xml.Name   `xml:"http://schemas.xmlsoap.org/soap/envelope/ Body"`
+	Status  samlStatus `xml:"urn:oasis:names:tc:SAML:1.0:protocol Status"`
+}
+
+type samlStatus struct {
+	XMLName    xml.Name       `xml:"urn:oasis:names:tc:SAML:1.0:protocol Status"`
+	StatusCode samlStatusCode `xml:"urn:oasis:names:tc:SAML:1.0:protocol StatusCode"`
+}
+
+type samlStatusCode struct {
+	XMLName xml.Name `xml:"urn:oasis:names:tc:SAML:1.0:protocol StatusCode"`
+	Value   string   `xml:"Value"`
+}
+
 // NewProvider creates sa new instance of the Provider
 // and loads in options from the environment
 func NewProvider() (*Provider, error) {
@@ -47,9 +73,9 @@ func NewProvider() (*Provider, error) {
 		<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/">
 			<SOAP-ENV:Header/>
 			<SOAP-ENV:Body>
-				<samlp:Request xmlns:samlp="urn:oasis:names:tc:SAML:1.0:protocol" MajorVersion="1" MinorVersion="1" RequestID="{{.RequestID}}" IssueInstant="{{.IssueInstant}}">
-					<samlp:AssertionArtifact>{{.Ticket}}</samlp:AssertionArtifact>
-				</samlp:Request>
+				<saml1p:Request xmlns:saml1p="urn:oasis:names:tc:SAML:1.0:protocol" MajorVersion="1" MinorVersion="1" RequestID="{{.RequestID}}" IssueInstant="{{.IssueInstant}}">
+					<saml1p:AssertionArtifact>{{.Ticket}}</saml1p:AssertionArtifact>
+				</saml1p:Request>
 			</SOAP-ENV:Body>
 		</SOAP-ENV:Envelope>
 		`)
@@ -146,7 +172,23 @@ func (c *Provider) ServiceValidate(r *http.Request, ticket string) (*cas.Authent
 
 	// Try to parse the response body
 	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	log.Println()
 	log.Println(string(body))
+	log.Println()
+	soapResponse := soapEnvelope{}
+	err = xml.Unmarshal(body, &soapResponse)
+	if err != nil {
+		return nil, err
+	}
+	log.Printf("%+v\n", soapResponse)
+	log.Println()
+	log.Printf("%#v\n", soapResponse)
+	log.Println()
+
+	// TODO remove
 	authResponse, err := cas.ParseServiceResponse(body)
 	if err != nil {
 		return nil, err
