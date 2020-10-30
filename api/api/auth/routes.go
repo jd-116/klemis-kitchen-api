@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/go-chi/chi"
-	"github.com/segmentio/ksuid"
 
 	"github.com/jd-116/klemis-kitchen-api/auth"
 	"github.com/jd-116/klemis-kitchen-api/cas"
@@ -33,10 +32,10 @@ func Routes(casProvider *cas.Provider, database db.Provider, jwtManager *auth.JW
 		}
 	}
 
-	// Create the flow continuation map
+	// Create the flow continuation nonce map
 	pollInterval := 2 * time.Minute
 	maxTTL := 10 * time.Minute
-	flowContinuation := NewFlowContinuationMap(pollInterval, int64(maxTTL/time.Second))
+	flowContinuation := NewNonceMap(pollInterval, int64(maxTTL/time.Second))
 
 	// Determine if the redirect URIs are valid using lambda
 	validRedirectURIPrefixes := []string{}
@@ -69,7 +68,7 @@ func Routes(casProvider *cas.Provider, database db.Provider, jwtManager *auth.JW
 }
 
 // Handles the GT SSO login flow via the CAS protocol v2
-func Login(casProvider *cas.Provider, flowContinuation *FlowContinuationMap,
+func Login(casProvider *cas.Provider, flowContinuation *NonceMap,
 	cookieDomain string, secureContinuationCookies bool,
 	isRedirectURIValid func(string) bool,
 	membershipProvider db.MembershipProvider,
@@ -100,26 +99,19 @@ func Login(casProvider *cas.Provider, flowContinuation *FlowContinuationMap,
 				return
 			}
 
-			// Generate the flow continuation ID
-			flowContinuationId, err := ksuid.NewRandom()
+			// Generate the flow continuation nonce
+			flowContinuationNonce, err := flowContinuation.Provision(redirectURI)
 			if err != nil {
 				util.Error(w, err)
 				return
 			}
-			flowContinuationIdStr := flowContinuationId.String()
-			flowContinuation.Put(flowContinuationIdStr, redirectURI)
-
-			// Remove the redirect URI parameter from the URL
-			query := r.URL.Query()
-			query.Del("redirect_uri")
-			r.URL.RawQuery = query.Encode()
 
 			// Include the flow continuation cookie
 			ttl := 5 * time.Minute
 			expire := time.Now().Add(ttl)
 			cookie := http.Cookie{
 				Name:     FlowContinuationCookieName,
-				Value:    flowContinuationIdStr,
+				Value:    flowContinuationNonce,
 				Secure:   secureContinuationCookies,
 				HttpOnly: true,
 				Path:     "/",
@@ -146,11 +138,16 @@ func Login(casProvider *cas.Provider, flowContinuation *FlowContinuationMap,
 				return
 			}
 
-			// Extract the original redirect URI
-			redirectURI, ok := flowContinuation.Get(flowContinuationCookie.Value)
+			// Extract the original redirect URI from the flow continuation nonce
+			redirectURIRaw, ok := flowContinuation.Use(flowContinuationCookie.Value)
 			if !ok {
 				util.ErrorWithCode(w, errors.New("request doesn't come at the end of authentication flow"),
 					http.StatusForbidden)
+				return
+			}
+			redirectURI, ok := redirectURIRaw.(string)
+			if !ok {
+				util.Error(w, errors.New("request had invalid continuation nonce value"))
 				return
 			}
 

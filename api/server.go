@@ -163,7 +163,7 @@ func (a *APIServer) routes() *chi.Mux {
 	// ==============================
 	// Add all routes to the API here
 	// ==============================
-	router.Route("/api/v1", func(r chi.Router) {
+	router.Route("/v1", func(r chi.Router) {
 		// Can be used for health checks
 		r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(204)
