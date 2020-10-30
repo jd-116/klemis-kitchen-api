@@ -165,11 +165,6 @@ func (c *Provider) ServiceValidate(r *http.Request, ticket string) (*cas.Authent
 	}
 	defer res.Body.Close()
 
-	// Make sure the request succeeded
-	if res.StatusCode != http.StatusOK {
-		return nil, NewCASValidationFailedError()
-	}
-
 	// Try to parse the response body
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
@@ -178,6 +173,12 @@ func (c *Provider) ServiceValidate(r *http.Request, ticket string) (*cas.Authent
 	log.Println()
 	log.Println(string(body))
 	log.Println()
+
+	// Make sure the request succeeded
+	if res.StatusCode != http.StatusOK {
+		return nil, NewCASValidationFailedError()
+	}
+
 	soapResponse := soapEnvelope{}
 	err = xml.Unmarshal(body, &soapResponse)
 	if err != nil {
