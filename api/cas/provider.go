@@ -4,14 +4,12 @@ import (
 	"bytes"
 	"encoding/xml"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/url"
 	"path"
+	"strings"
 	"text/template"
 	"time"
-
-	"gopkg.in/cas.v2"
 
 	"github.com/jd-116/klemis-kitchen-api/util"
 	"github.com/segmentio/ksuid"
@@ -23,37 +21,6 @@ type Provider struct {
 	url                  *url.URL
 	samlValidateTemplate *template.Template
 	httpClient           *http.Client
-}
-
-type samlValidateArguments struct {
-	RequestID    string
-	IssueInstant string
-	Ticket       string
-}
-
-type soapEnvelope struct {
-	XMLName xml.Name    `xml:"http://schemas.xmlsoap.org/soap/envelope/ Envelope"`
-	Body    soapBody    `xml:"http://schemas.xmlsoap.org/soap/envelope/ Body"`
-	Header  *soapHeader `xml:"http://schemas.xmlsoap.org/soap/envelope/ Header"`
-}
-
-type soapHeader struct {
-	XMLName xml.Name `xml:"http://schemas.xmlsoap.org/soap/envelope/ Header"`
-}
-
-type soapBody struct {
-	XMLName xml.Name   `xml:"http://schemas.xmlsoap.org/soap/envelope/ Body"`
-	Status  samlStatus `xml:"urn:oasis:names:tc:SAML:1.0:protocol Status"`
-}
-
-type samlStatus struct {
-	XMLName    xml.Name       `xml:"urn:oasis:names:tc:SAML:1.0:protocol Status"`
-	StatusCode samlStatusCode `xml:"urn:oasis:names:tc:SAML:1.0:protocol StatusCode"`
-}
-
-type samlStatusCode struct {
-	XMLName xml.Name `xml:"urn:oasis:names:tc:SAML:1.0:protocol StatusCode"`
-	Value   string   `xml:"Value"`
 }
 
 // NewProvider creates sa new instance of the Provider
@@ -114,7 +81,7 @@ func (c *Provider) Redirect(w http.ResponseWriter, r *http.Request) error {
 
 // ServiceValidate constructs and sends the service validate request to the CAS Server,
 // parsing the body if successful
-func (c *Provider) ServiceValidate(r *http.Request, ticket string) (*cas.AuthenticationResponse, error) {
+func (c *Provider) ServiceValidate(r *http.Request, ticket string) (*Identity, error) {
 	// Get the original query URL without any queries
 	requestURL, err := requestURL(r)
 	if err != nil {
@@ -137,21 +104,20 @@ func (c *Provider) ServiceValidate(r *http.Request, ticket string) (*cas.Authent
 		return nil, err
 	}
 
-	// Construct the request body
-	bodyArguments := samlValidateArguments{
+	// Create the envelope XML
+	envelopeBytes := &bytes.Buffer{}
+	err = c.samlValidateTemplate.Execute(envelopeBytes, samlValidateArguments{
 		RequestID:    requestID.String(),
 		IssueInstant: time.Now().UTC().Format(time.RFC3339),
 		Ticket:       ticket,
-	}
-	buf := &bytes.Buffer{}
-	err = c.samlValidateTemplate.Execute(buf, bodyArguments)
+	})
 	if err != nil {
 		return nil, err
 	}
 
 	// Create the request with all options
 	method := http.MethodPost
-	req, err := http.NewRequest(method, samlValidateURL.String(), buf)
+	req, err := http.NewRequest(method, samlValidateURL.String(), envelopeBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -169,32 +135,53 @@ func (c *Provider) ServiceValidate(r *http.Request, ticket string) (*cas.Authent
 	if err != nil {
 		return nil, err
 	}
-	log.Println()
-	log.Println(string(body))
-	log.Println()
 
 	// Make sure the request succeeded
 	if res.StatusCode != http.StatusOK {
 		return nil, NewCASValidationFailedError()
 	}
 
+	// Parse the envelope
 	soapResponse := soapEnvelope{}
 	err = xml.Unmarshal(body, &soapResponse)
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("%+v\n", soapResponse)
-	log.Println()
-	log.Printf("%#v\n", soapResponse)
-	log.Println()
 
-	// TODO remove
-	authResponse, err := cas.ParseServiceResponse(body)
+	// Make sure there is a Body
+	if len(soapResponse.Body.InnerXML) == 0 {
+		return nil, NewCASValidationFailedError()
+	}
+
+	samlData := samlResponse{}
+	err = xml.Unmarshal(soapResponse.Body.InnerXML, &samlData)
 	if err != nil {
 		return nil, err
 	}
 
-	return authResponse, nil
+	// Make sure the validation succeeded
+	if !strings.HasSuffix(samlData.Status.StatusCode.Value, "Success") {
+		return nil, NewCASValidationFailedError()
+	}
+
+	// Create the identity struct and extract the fields
+	identity := Identity{}
+	assertion := samlData.Assertion
+	identity.Username = strings.TrimSpace(assertion.AttributeStatement.Subject.NameIdentifier)
+	if identity.Username == "" {
+		identity.Username = strings.TrimSpace(assertion.AttributeStatement.Subject.NameIdentifier)
+	}
+	for _, attribute := range assertion.AttributeStatement.Attributes {
+		// See if this attribute is a last name (sn)
+		// or a first name (givenName) attribute
+		if attribute.AttributeName == "sn" {
+			identity.LastName = strings.TrimSpace(attribute.AttributeValue)
+		} else if attribute.AttributeName == "givenName" {
+			identity.FirstName = strings.TrimSpace(attribute.AttributeValue)
+		}
+	}
+
+	return &identity, nil
 }
 
 // requestURL determines an absolute URL from the http.Request.

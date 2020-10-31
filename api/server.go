@@ -152,28 +152,42 @@ func (a *APIServer) routes() *chi.Mux {
 	// https://itnext.io/how-i-pass-around-shared-resources-databases-configuration-etc-within-golang-projects-b27af4d8e8a
 	router := chi.NewRouter()
 	router.Use(
+		middleware.Recoverer,                          // Recover from panics without crashing the server
+		middleware.Logger,                             // Log API request calls
+		middleware.RedirectSlashes,                    // Redirect slashes to no slash URL versions
 		render.SetContentType(render.ContentTypeJSON), // Set content-type headers to application/json
-		middleware.Logger,          // Log API request calls
-		middleware.Compress(5),     // Compress results, mostly gzipping assets and json
-		middleware.RedirectSlashes, // Redirect slashes to no slash URL versions
-		middleware.Recoverer,       // Recover from panics without crashing the server // Basic CORS
-		a.corsMiddleware(),         // Create cors middleware from go-chi/cors
+		middleware.Compress(5),                        // Compress results, mostly gzipping assets and json
+		middleware.NoCache,                            // Prevent clients from caching the results
+		a.corsMiddleware(),                            // Create cors middleware from go-chi/cors
 	)
 
 	// ==============================
 	// Add all routes to the API here
 	// ==============================
 	router.Route("/v1", func(r chi.Router) {
-		// Can be used for health checks
-		r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(204)
+		// Public routes
+		r.Group(func(r chi.Router) {
+			// Can be used for health checks
+			r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(204)
+			})
+
+			r.Mount("/auth", apiAuth.Routes(a.casProvider, a.dbProvider, a.jwtManager))
 		})
 
-		r.Mount("/auth", apiAuth.Routes(a.casProvider, a.dbProvider, a.jwtManager))
-		r.Mount("/announcements", announcements.Routes(a.dbProvider))
-		r.Mount("/products", apiProducts.Routes(a.dbProvider, a.itemProvider))
-		r.Mount("/locations", locations.Routes(a.dbProvider, a.itemProvider))
-		r.Mount("/memberships", memberships.Routes(a.dbProvider))
+		// Protected routes
+		r.Group(func(r chi.Router) {
+			// Seek, verify and validate JWT tokens,
+			// sending appropriate status codes upon failure.
+			// Note that this does not perform *authorization* checks involving perms;
+			// if needed, use auth.AdminAuthenticator to use Permissions.AdminAccess
+			r.Use(a.jwtManager.Authenticated())
+
+			r.Mount("/announcements", announcements.Routes(a.dbProvider))
+			r.Mount("/products", apiProducts.Routes(a.dbProvider, a.itemProvider))
+			r.Mount("/locations", locations.Routes(a.dbProvider, a.itemProvider))
+			r.Mount("/memberships", memberships.Routes(a.dbProvider))
+		})
 	})
 
 	return router
