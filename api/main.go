@@ -8,13 +8,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/jd-116/klemis-kitchen-api/util"
+	"github.com/jd-116/klemis-kitchen-api/env"
 )
 
 // Starts the main API and waits for termination signals.
 // This function blocks.
 func main() {
-	apiPort, err := util.GetIntEnv("server port", "SERVER_PORT")
+	apiPort, err := env.GetIntEnv("server port", "SERVER_PORT")
 	if err != nil {
 		log.Fatal(err)
 	}

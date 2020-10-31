@@ -11,8 +11,9 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/jd-116/klemis-kitchen-api/util"
 	"github.com/segmentio/ksuid"
+
+	"github.com/jd-116/klemis-kitchen-api/env"
 )
 
 // Provider bundles together various structs
@@ -26,7 +27,7 @@ type Provider struct {
 // NewProvider creates sa new instance of the Provider
 // and loads in options from the environment
 func NewProvider() (*Provider, error) {
-	casUrlStr, err := util.GetEnv("CAS base URL", "CAS_SERVER_URL")
+	casUrlStr, err := env.GetEnv("CAS base URL", "CAS_SERVER_URL")
 	if err != nil {
 		return nil, err
 	}

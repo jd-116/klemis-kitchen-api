@@ -12,6 +12,7 @@ import (
 	"github.com/dgrijalva/jwt-go"
 	"github.com/go-chi/jwtauth"
 
+	"github.com/jd-116/klemis-kitchen-api/env"
 	"github.com/jd-116/klemis-kitchen-api/types"
 	"github.com/jd-116/klemis-kitchen-api/util"
 )
@@ -77,7 +78,7 @@ func (c *Claims) Valid() error {
 // NewJWTManager creates a new JWTManager
 // and loads the secret from the environment
 func NewJWTManager() (*JWTManager, error) {
-	jwtSecretStr, err := util.GetEnv("auth JWT secret key", "AUTH_JWT_SECRET")
+	jwtSecretStr, err := env.GetEnv("auth JWT secret key", "AUTH_JWT_SECRET")
 	if err != nil {
 		return nil, err
 	}

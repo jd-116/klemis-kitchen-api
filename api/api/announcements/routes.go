@@ -115,8 +115,13 @@ func Create(announcementProvider db.AnnouncementProvider) http.HandlerFunc {
 
 			err = announcementProvider.CreateAnnouncement(r.Context(), announcement)
 			if err != nil {
-				util.Error(w, err)
-				continue
+				// If the error was a duplicate ID; try again
+				if _, ok := err.(*db.DuplicateIDError); ok {
+					continue
+				} else {
+					util.Error(w, err)
+					return
+				}
 			} else {
 				// Return the single announcement as the top-level JSON
 				jsonResponse, err := json.Marshal(announcement)
