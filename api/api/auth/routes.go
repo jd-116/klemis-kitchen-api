@@ -73,7 +73,7 @@ func Routes(casProvider *cas.Provider, database db.Provider, jwtManager *auth.JW
 
 	// Try to see if the continuation cookies should be secure
 	var tokenExpirationHours *int64 = nil
-	if value, ok := os.LookupEnv("tokenExpirationHours"); ok {
+	if value, ok := os.LookupEnv("AUTH_JWT_TOKEN_EXPIRES_AFTER"); ok {
 		valueInt, err := strconv.Atoi(value)
 		if err == nil {
 			valueInt64 := int64(valueInt)
@@ -82,11 +82,24 @@ func Routes(casProvider *cas.Provider, database db.Provider, jwtManager *auth.JW
 	}
 
 	router := chi.NewRouter()
-	router.Get("/login", Login(casProvider, flowContinuation, authCodes, cookieDomain,
-		secureContinuationCookies, isRedirectURIValid, database, jwtManager,
-		tokenExpirationHours))
-	router.Post("/token-exchange", TokenExchange(authCodes, jwtManager))
-	router.Get("/session", Session(jwtManager))
+
+	// Public routes
+	router.Group(func(r chi.Router) {
+		r.Get("/login", Login(casProvider, flowContinuation, authCodes, cookieDomain,
+			secureContinuationCookies, isRedirectURIValid, database, jwtManager,
+			tokenExpirationHours))
+		r.Post("/token-exchange", TokenExchange(authCodes, jwtManager))
+	})
+
+	// Protect the /session route and validate JWTs
+	router.Group(func(r chi.Router) {
+		// Seek, verify and validate JWT tokens,
+		// sending appropriate status codes upon failure.
+		r.Use(jwtManager.Authenticated())
+
+		r.Get("/session", Session(jwtManager))
+	})
+
 	return router
 }
 
@@ -288,12 +301,37 @@ func TokenExchange(authCodes *NonceMap, jwtManager *auth.JWTManager) func(w http
 	}
 }
 
+// SessionResponse bundles together the session and the permissions
+type SessionResponse struct {
+	Session     types.Session     `json:"session"`
+	Permissions types.Permissions `json:"permissions"`
+}
+
 // Session returns the inner data of the user's session by reading their JWT
 // and validating it
 func Session(jwtManager *auth.JWTManager) func(w http.ResponseWriter, r *http.Request) {
 	// Use a closure to inject dependencies
 	return func(w http.ResponseWriter, r *http.Request) {
-		// TODO implement
+		// Extract the claims from the token
+		_, claims, err := auth.FromContext(r.Context())
+		if err != nil {
+			util.ErrorWithCode(w, err, http.StatusUnauthorized)
+		}
+
+		// Create the response object and send it to the user
+		responseData := SessionResponse{
+			Session:     *claims.Session(),
+			Permissions: claims.Permissions,
+		}
+		jsonResponse, err := json.Marshal(responseData)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(jsonResponse)
 	}
 }
 

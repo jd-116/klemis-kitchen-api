@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi"
 	"github.com/lithammer/fuzzysearch/fuzzy"
 
+	"github.com/jd-116/klemis-kitchen-api/auth"
 	"github.com/jd-116/klemis-kitchen-api/db"
 	"github.com/jd-116/klemis-kitchen-api/products"
 	"github.com/jd-116/klemis-kitchen-api/types"
@@ -24,9 +25,16 @@ func Routes(database db.Provider, products products.Provider) *chi.Mux {
 	router.Get("/{id}", GetSingle(database))
 	router.Get("/{id}/products", GetProducts(database, database, products))
 	router.Get("/{id}/products/{product_id}", GetProduct(database, database, products))
-	router.Post("/", Create(database))
-	router.Delete("/{id}", Delete(database))
-	router.Patch("/{id}", Update(database))
+
+	// Admin-only routes
+	router.Group(func(r chi.Router) {
+		// Ensure the user has access
+		r.Use(auth.AdminAuthenticated)
+
+		r.Post("/", Create(database))
+		r.Delete("/{id}", Delete(database))
+		r.Patch("/{id}", Update(database))
+	})
 	return router
 }
 
