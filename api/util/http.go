@@ -4,8 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 
+	"github.com/jd-116/klemis-kitchen-api/cas"
 	"github.com/jd-116/klemis-kitchen-api/db"
+	"github.com/jd-116/klemis-kitchen-api/products"
 	"github.com/jd-116/klemis-kitchen-api/types"
 )
 
@@ -16,6 +19,36 @@ func ResponseCodeFromError(err error) int {
 		return http.StatusBadRequest
 	case *db.NotFoundError:
 		return http.StatusNotFound
+	case *cas.CASValidationFailedError:
+		return http.StatusUnauthorized
+	case *products.CacheNotInitializedError:
+		return http.StatusTooEarly
+	case *products.LocationNotFoundError:
+		return http.StatusNotFound
+	case *products.PartialProductNotFoundError:
+		return http.StatusNotFound
+	case *json.InvalidUTF8Error:
+		return http.StatusBadRequest
+	case *json.InvalidUnmarshalError:
+		return http.StatusBadRequest
+	case *json.MarshalerError:
+		return http.StatusBadRequest
+	case *json.SyntaxError:
+		return http.StatusBadRequest
+	case *json.UnmarshalFieldError:
+		return http.StatusBadRequest
+	case *json.UnmarshalTypeError:
+		return http.StatusBadRequest
+	case *json.UnsupportedValueError:
+		return http.StatusBadRequest
+	case *json.UnsupportedTypeError:
+		return http.StatusBadRequest
+	case *url.Error:
+		return http.StatusBadRequest
+	case *url.EscapeError:
+		return http.StatusBadRequest
+	case *url.InvalidHostError:
+		return http.StatusBadRequest
 	default:
 		return http.StatusInternalServerError
 	}

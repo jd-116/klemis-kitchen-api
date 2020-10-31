@@ -8,8 +8,8 @@ import (
 
 	"github.com/hako/durafmt"
 
+	"github.com/jd-116/klemis-kitchen-api/env"
 	"github.com/jd-116/klemis-kitchen-api/products"
-	"github.com/jd-116/klemis-kitchen-api/util"
 )
 
 // Provider bundles together a stateful item provider via the Transact API,
@@ -34,37 +34,37 @@ type Provider struct {
 // and creates the provider
 // (doesn't involve authentication or start goroutines)
 func NewProvider() (*Provider, error) {
-	baseURL, err := util.GetEnv("Transact base URL", "TRANSACT_BASE_URL")
+	baseURL, err := env.GetEnv("Transact base URL", "TRANSACT_BASE_URL")
 	if err != nil {
 		return nil, err
 	}
 
-	tenant, err := util.GetEnv("Transact tenant", "TRANSACT_TENANT")
+	tenant, err := env.GetEnv("Transact tenant", "TRANSACT_TENANT")
 	if err != nil {
 		return nil, err
 	}
 
-	username, err := util.GetEnv("Transact username", "TRANSACT_USERNAME")
+	username, err := env.GetEnv("Transact username", "TRANSACT_USERNAME")
 	if err != nil {
 		return nil, err
 	}
 
-	password, err := util.GetEnv("Transact password", "TRANSACT_PASSWORD")
+	password, err := env.GetEnv("Transact password", "TRANSACT_PASSWORD")
 	if err != nil {
 		return nil, err
 	}
 
-	fetchPeriod, err := util.GetDurationEnv("Transact API fetch period", "TRANSACT_FETCH_PERIOD")
+	fetchPeriod, err := env.GetDurationEnv("Transact API fetch period", "TRANSACT_FETCH_PERIOD")
 	if err != nil {
 		return nil, err
 	}
 
-	reloadSessionPeriod, err := util.GetDurationEnv("Transact API reload session period", "TRANSACT_RELOAD_SESSION_PERIOD")
+	reloadSessionPeriod, err := env.GetDurationEnv("Transact API reload session period", "TRANSACT_RELOAD_SESSION_PERIOD")
 	if err != nil {
 		return nil, err
 	}
 
-	productClassName, err := util.GetEnv("Transact product class name", "TRANSACT_PRODUCT_CLASS_NAME")
+	productClassName, err := env.GetEnv("Transact product class name", "TRANSACT_PRODUCT_CLASS_NAME")
 	if err != nil {
 		return nil, err
 	}
