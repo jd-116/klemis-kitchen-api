@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi"
 	"github.com/lithammer/fuzzysearch/fuzzy"
 
+	"github.com/jd-116/klemis-kitchen-api/auth"
 	"github.com/jd-116/klemis-kitchen-api/db"
 	"github.com/jd-116/klemis-kitchen-api/products"
 	"github.com/jd-116/klemis-kitchen-api/types"
@@ -22,7 +23,13 @@ func Routes(database db.Provider, products products.Provider) *chi.Mux {
 	router := chi.NewRouter()
 	router.Get("/", GetAll(database, database, products))
 	router.Get("/{id}", GetSingle(database, database, products))
-	router.Patch("/{id}", Update(database))
+
+	// Admin-only routes
+	router.Group(func(r chi.Router) {
+		// Ensure the user has access
+		r.Use(auth.AdminAuthenticated)
+		r.Patch("/{id}", Update(database))
+	})
 	return router
 }
 
@@ -235,28 +242,69 @@ func Update(productMetadataProvider db.ProductMetadataProvider) http.HandlerFunc
 			return
 		}
 
-		partial := make(map[string]interface{})
-		err := json.NewDecoder(r.Body).Decode(&partial)
+		productMetadata, err := productMetadataProvider.GetProduct(r.Context(), id)
 		if err != nil {
-			util.Error(w, err)
-			return
+			// Continue with partial product
+			productMetadata = nil
 		}
 
-		updated, err := productMetadataProvider.UpdateProduct(r.Context(), id, partial)
-		if err != nil {
-			util.Error(w, err)
-			return
-		}
+		if productMetadata != nil {
+			partial := make(map[string]interface{})
+			err := json.NewDecoder(r.Body).Decode(&partial)
+			if err != nil {
+				util.Error(w, err)
+				return
+			}
 
-		// Return the updated product metadata as the top-level JSON
-		jsonResponse, err := json.Marshal(updated)
-		if err != nil {
-			util.ErrorWithCode(w, err, http.StatusInternalServerError)
-			return
-		}
+			updated, err := productMetadataProvider.UpdateProduct(r.Context(), id, partial)
+			if err != nil {
+				util.Error(w, err)
+				return
+			}
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write(jsonResponse)
+			// Return the updated product metadata as the top-level JSON
+			jsonResponse, err := json.Marshal(updated)
+			if err != nil {
+				util.ErrorWithCode(w, err, http.StatusInternalServerError)
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			w.Write(jsonResponse)
+
+		} else {
+
+			var productMetadata types.ProductMetadata
+			err := json.NewDecoder(r.Body).Decode(&productMetadata)
+			if err != nil {
+				util.Error(w, err)
+				return
+			}
+
+			productMetadata.ID = strings.TrimSpace(productMetadata.ID)
+			if productMetadata.ID == "" {
+				util.Error(w, errors.New("productMetadata ID cannot be empty"))
+				return
+			}
+
+			err = productMetadataProvider.CreateProduct(r.Context(), productMetadata)
+			if err != nil {
+				util.Error(w, err)
+				return
+			}
+
+			// Return the updated product metadata as the top-level JSON
+			jsonResponse, err := json.Marshal(productMetadata)
+			if err != nil {
+				util.ErrorWithCode(w, err, http.StatusInternalServerError)
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			w.Write(jsonResponse)
+
+		}
 	}
 }
