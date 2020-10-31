@@ -122,6 +122,14 @@ func (p *Provider) initialize(ctx context.Context) error {
 		return err
 	}
 
+	_, err = p.memberships().Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys:    bson.M{"username": 1},
+		Options: options.Index().SetUnique(true),
+	})
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -135,6 +143,10 @@ func (p *Provider) products() *mongo.Collection {
 
 func (p *Provider) locations() *mongo.Collection {
 	return p.client.Database(p.databaseName).Collection("locations")
+}
+
+func (p *Provider) memberships() *mongo.Collection {
+	return p.client.Database(p.databaseName).Collection("memberships")
 }
 
 // GetAnnouncement gets a single announcement given its ID
@@ -186,6 +198,23 @@ func (p *Provider) GetLocation(ctx context.Context, id string) (*types.Location,
 	}
 
 	return &location, nil
+}
+
+// GetMembership gets a single membership given its username
+func (p *Provider) GetMembership(ctx context.Context, username string) (*types.Membership, error) {
+	collection := p.memberships()
+	result := collection.FindOne(ctx, bson.D{{Key: "username", Value: username}})
+	if result.Err() == mongo.ErrNoDocuments {
+		return nil, db.NewNotFoundError(username)
+	}
+
+	var membership types.Membership
+	err := result.Decode(&membership)
+	if err != nil {
+		return nil, err
+	}
+
+	return &membership, nil
 }
 
 // GetAllAnnouncements gets a slice of all announcements in the database
@@ -263,6 +292,31 @@ func (p *Provider) GetAllLocations(ctx context.Context) ([]types.Location, error
 	return locations, nil
 }
 
+// GetAllMemberships gets a slice of all memberships in the database
+func (p *Provider) GetAllMemberships(ctx context.Context) ([]types.Membership, error) {
+	collection := p.memberships()
+
+	options := options.Find()
+	options.SetSort(bson.D{{Key: "username", Value: 1}})
+	cursor, err := collection.Find(ctx, bson.D{}, options)
+	if err != nil {
+		return nil, err
+	}
+
+	var memberships []types.Membership
+	err = cursor.All(ctx, &memberships)
+	if err != nil {
+		return nil, err
+	}
+
+	// Return non-nil slice so JSON serialization is nice
+	if memberships == nil {
+		return []types.Membership{}, nil
+	}
+
+	return memberships, nil
+}
+
 // CreateAnnouncement attempts to insert a new announcement into the database
 func (p *Provider) CreateAnnouncement(ctx context.Context, announcement types.Announcement) error {
 	collection := p.announcements()
@@ -303,6 +357,22 @@ func (p *Provider) CreateLocation(ctx context.Context, location types.Location) 
 		// Handle known cases (such as when the location was duplicate)
 		if writeException, ok := err.(mongo.WriteException); ok && isDuplicate(writeException) {
 			return db.NewDuplicateIDError(location.ID)
+		}
+
+		return err
+	}
+
+	return nil
+}
+
+// CreateLocation attempts to insert a new membership into the database
+func (p *Provider) CreateMembership(ctx context.Context, membership types.Membership) error {
+	collection := p.memberships()
+	_, err := collection.InsertOne(ctx, membership)
+	if err != nil {
+		// Handle known cases (such as when the membership was duplicate)
+		if writeException, ok := err.(mongo.WriteException); ok && isDuplicate(writeException) {
+			return db.NewDuplicateIDError(membership.Username)
 		}
 
 		return err
@@ -363,6 +433,21 @@ func (p *Provider) DeleteLocation(ctx context.Context, id string) error {
 
 	if result.DeletedCount == 0 {
 		return db.NewNotFoundError(id)
+	}
+
+	return nil
+}
+
+// DeleteLocation deletes an existing location by its username
+func (p *Provider) DeleteMembership(ctx context.Context, username string) error {
+	collection := p.memberships()
+	result, err := collection.DeleteOne(ctx, bson.D{{Key: "username", Value: username}})
+	if err != nil {
+		return err
+	}
+
+	if result.DeletedCount == 0 {
+		return db.NewNotFoundError(username)
 	}
 
 	return nil
@@ -435,4 +520,27 @@ func (p *Provider) UpdateLocation(ctx context.Context, id string, update map[str
 	}
 
 	return &updatedLocation, nil
+}
+
+// UpdateLocation updates an existing membership by its username
+// and a partial document containing new fields that override current ones
+func (p *Provider) UpdateMembership(ctx context.Context, username string, update map[string]interface{}) (*types.Membership, error) {
+	// Construct the patch query from the map
+	updateDocument := bson.D{}
+	for key, value := range update {
+		updateDocument = append(updateDocument, bson.E{Key: key, Value: value})
+	}
+
+	collection := p.memberships()
+	filter := bson.D{{Key: "username", Value: username}}
+	updateQuery := bson.D{{Key: "$set", Value: updateDocument}}
+	var updatedMembership types.Membership
+	err := collection.FindOneAndUpdate(ctx, filter, updateQuery).Decode(&updatedMembership)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, db.NewNotFoundError(username)
+		}
+	}
+
+	return &updatedMembership, nil
 }
