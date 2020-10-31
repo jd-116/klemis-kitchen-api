@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strings"
 
 	"github.com/go-chi/chi"
+	"github.com/segmentio/ksuid"
 
 	"github.com/jd-116/klemis-kitchen-api/db"
 	"github.com/jd-116/klemis-kitchen-api/types"
@@ -82,36 +82,47 @@ func GetSingle(announcementProvider db.AnnouncementProvider) http.HandlerFunc {
 // Create creates a new announcement in the database
 func Create(announcementProvider db.AnnouncementProvider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var announcement types.Announcement
-		err := json.NewDecoder(r.Body).Decode(&announcement)
+
+		var announcementCreate types.AnnouncementCreate
+		err := json.NewDecoder(r.Body).Decode(&announcementCreate)
 		if err != nil {
 			util.Error(w, err)
 			return
 		}
 
-		announcement.ID = strings.TrimSpace(announcement.ID)
-		if announcement.ID == "" {
-			util.ErrorWithCode(w, errors.New("announcement ID cannot be empty"),
-				http.StatusBadRequest)
-			return
+		announcement := types.Announcement{
+			Title:     announcementCreate.Title,
+			Body:      announcementCreate.Body,
+			Timestamp: announcementCreate.Timestamp,
 		}
 
-		err = announcementProvider.CreateAnnouncement(r.Context(), announcement)
-		if err != nil {
-			util.Error(w, err)
-			return
-		}
+		for {
+			rand, err := ksuid.NewRandom()
+			if err != nil {
+				util.Error(w, err)
+				return
+			}
 
-		// Return the single announcement as the top-level JSON
-		jsonResponse, err := json.Marshal(announcement)
-		if err != nil {
-			util.ErrorWithCode(w, err, http.StatusInternalServerError)
-			return
-		}
+			announcement.ID = rand.String()
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		w.Write(jsonResponse)
+			err = announcementProvider.CreateAnnouncement(r.Context(), announcement)
+			if err != nil {
+				util.Error(w, err)
+				continue
+			} else {
+				// Return the single announcement as the top-level JSON
+				jsonResponse, err := json.Marshal(announcement)
+				if err != nil {
+					util.ErrorWithCode(w, err, http.StatusInternalServerError)
+					return
+				}
+
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusCreated)
+				w.Write(jsonResponse)
+				return
+			}
+		}
 	}
 }
 

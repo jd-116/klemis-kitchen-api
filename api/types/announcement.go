@@ -9,3 +9,11 @@ type Announcement struct {
 	Body      string    `json:"body" bson:"body"`
 	Timestamp time.Time `json:"timestamp" bson:"timestamp"`
 }
+
+// AnnouncementCreate is supplied through the dashboard and converted into
+// an Announcement
+type AnnouncementCreate struct {
+	Title     string    `json:"title" bson:"title"`
+	Body      string    `json:"body" bson:"body"`
+	Timestamp time.Time `json:"timestamp" bson:"timestamp"`
+}
