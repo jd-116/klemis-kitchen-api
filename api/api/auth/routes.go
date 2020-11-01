@@ -22,9 +22,10 @@ import (
 	"github.com/jd-116/klemis-kitchen-api/util"
 )
 
-// The name of the cookie attached to the auth flow
+// FlowContinuationCookieName is the name of the cookie attached to the auth flow
 const FlowContinuationCookieName = "FlowContinuation"
 
+// Routes creates a new Chi router with all of the routes for the auth flow
 func Routes(casProvider *cas.Provider, database db.Provider, jwtManager *auth.JWTManager) *chi.Mux {
 	// Try to get the domain env variable if it is set
 	cookieDomain := strings.TrimSpace(os.Getenv("API_SERVER_DOMAIN"))
@@ -103,7 +104,7 @@ func Routes(casProvider *cas.Provider, database db.Provider, jwtManager *auth.JW
 	return router
 }
 
-// Handles the GT SSO login flow via the CAS protocol v2
+// Login handles the GT SSO login flow via the CAS protocol v2
 func Login(casProvider *cas.Provider, flowContinuation *NonceMap,
 	authCodes *NonceMap, cookieDomain string, secureContinuationCookies bool,
 	isRedirectURIValid func(string) bool, membershipProvider db.MembershipProvider,
@@ -182,7 +183,8 @@ func Login(casProvider *cas.Provider, flowContinuation *NonceMap,
 			}
 			redirectURI, ok := redirectURIRaw.(string)
 			if !ok {
-				util.Error(w, errors.New("request had invalid flow continuation nonce value"))
+				util.ErrorWithCode(w, errors.New("request had invalid flow continuation nonce value"),
+					http.StatusForbidden)
 				return
 			}
 
@@ -271,7 +273,8 @@ func TokenExchange(authCodes *NonceMap, jwtManager *auth.JWTManager) func(w http
 		}
 		token, ok := rawToken.(*jwt.Token)
 		if !ok {
-			util.Error(w, errors.New("request had invalid flow continuation nonce value"))
+			util.ErrorWithCode(w, errors.New("request had invalid flow continuation nonce value"),
+				http.StatusForbidden)
 			return
 		}
 
@@ -338,9 +341,9 @@ func Session(jwtManager *auth.JWTManager) func(w http.ResponseWriter, r *http.Re
 // terminalRedirect is a utility function used at the end of the auth flow
 // to send a single key-value pair to the original initiator
 func terminalRedirect(w http.ResponseWriter, r *http.Request,
-	baseUri string, key string, value string) error {
+	baseURI string, key string, value string) error {
 
-	u, err := url.ParseRequestURI(baseUri)
+	u, err := url.ParseRequestURI(baseURI)
 	if err != nil {
 		return err
 	}

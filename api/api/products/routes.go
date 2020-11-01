@@ -282,9 +282,10 @@ func Update(productMetadataProvider db.ProductMetadataProvider) http.HandlerFunc
 				return
 			}
 
-			productMetadata.ID = strings.TrimSpace(productMetadata.ID)
+			productMetadata.ID = strings.TrimSpace(id)
 			if productMetadata.ID == "" {
-				util.Error(w, errors.New("productMetadata ID cannot be empty"))
+				util.ErrorWithCode(w, errors.New("productMetadata ID cannot be empty"),
+					http.StatusBadRequest)
 				return
 			}
 
