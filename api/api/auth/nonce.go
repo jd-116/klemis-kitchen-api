@@ -47,7 +47,7 @@ func (m *NonceMap) evict(interval time.Duration) {
 	}
 }
 
-// Gets a value in the map, or returns with false as the second value.
+// Use gets a value in the map, or returns with false as the second value.
 // Deletes the item if it exists
 func (m *NonceMap) Use(nonce string) (interface{}, bool) {
 	value, ok := m.internal.LoadAndDelete(nonce)
@@ -63,7 +63,7 @@ func (m *NonceMap) Use(nonce string) (interface{}, bool) {
 	return "", false
 }
 
-// Provisions a new unique nonce and stores it in the map
+// Provision provisions a new unique nonce and stores it in the map
 func (m *NonceMap) Provision(value interface{}) (string, error) {
 	newItem := item{value, time.Now().Unix()}
 	for {

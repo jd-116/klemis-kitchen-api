@@ -12,8 +12,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 
 	"github.com/jd-116/klemis-kitchen-api/db"
+	"github.com/jd-116/klemis-kitchen-api/env"
 	"github.com/jd-116/klemis-kitchen-api/types"
-	"github.com/jd-116/klemis-kitchen-api/util"
 )
 
 const (
@@ -29,22 +29,22 @@ type Provider struct {
 
 // NewProvider creates a new provider and loads values in from the environment
 func NewProvider() (*Provider, error) {
-	dbHost, err := util.GetEnv("database host name", "MONGO_DB_HOST")
+	dbHost, err := env.GetEnv("database host name", "MONGO_DB_HOST")
 	if err != nil {
 		return nil, err
 	}
 
-	dbPwd, err := util.GetEnv("database password", "MONGO_DB_PWD")
+	dbPwd, err := env.GetEnv("database password", "MONGO_DB_PWD")
 	if err != nil {
 		return nil, err
 	}
 
-	dbCluster, err := util.GetEnv("database cluster name ", "MONGO_DB_CLUSTER")
+	dbCluster, err := env.GetEnv("database cluster name ", "MONGO_DB_CLUSTER")
 	if err != nil {
 		return nil, err
 	}
 
-	dbName, err := util.GetEnv("database name ", "MONGO_DB_NAME")
+	dbName, err := env.GetEnv("database name ", "MONGO_DB_NAME")
 	if err != nil {
 		return nil, err
 	}

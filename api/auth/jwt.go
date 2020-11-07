@@ -12,6 +12,7 @@ import (
 	"github.com/dgrijalva/jwt-go"
 	"github.com/go-chi/jwtauth"
 
+	"github.com/jd-116/klemis-kitchen-api/env"
 	"github.com/jd-116/klemis-kitchen-api/types"
 	"github.com/jd-116/klemis-kitchen-api/util"
 )
@@ -77,7 +78,7 @@ func (c *Claims) Valid() error {
 // NewJWTManager creates a new JWTManager
 // and loads the secret from the environment
 func NewJWTManager() (*JWTManager, error) {
-	jwtSecretStr, err := util.GetEnv("auth JWT secret key", "AUTH_JWT_SECRET")
+	jwtSecretStr, err := env.GetEnv("auth JWT secret key", "AUTH_JWT_SECRET")
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +125,11 @@ func (m *JWTManager) SignToken(token *jwt.Token) (string, error) {
 	return tokenString, err
 }
 
-const BypassAuthContextKey string = "BypassAuth"
+type key int
+
+// BypassAuthContextKey is the key to access the BypassAuth boolean field
+// on request contexts that are processed by the Authenticated middleware
+const BypassAuthContextKey key = iota
 
 // Authenticated handles seeking, verifying, and validating JWT tokens,
 // sending appropriate status codes upon failure.
@@ -142,27 +147,33 @@ func (m *JWTManager) Authenticated() func(http.Handler) http.Handler {
 				// Pass it through
 				verified.ServeHTTP(w, r.WithContext(ctx))
 			})
-		} else {
-			return verifier(authenticator(next))
 		}
+
+		// Compose the verifier and authenticator functions
+		return verifier(authenticator(next))
 	}
 }
 
+// AdminAuthenticated handles ensuring that the user has a valid token
+// and is authorized (has sufficient permissions) to access admin resources
 func AdminAuthenticated(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if value, ok := r.Context().Value(BypassAuthContextKey).(bool); ok && value == true {
 			// Skip authentication
 			next.ServeHTTP(w, r)
+			return
 		}
 
 		_, claims, err := FromContext(r.Context())
 		if err != nil {
 			unauthorized(w)
+			return
 		}
 
 		// Make sure the user has admin access
 		if !claims.Permissions.AdminAccess {
 			unauthorized(w)
+			return
 		}
 
 		// User is authorized, pass it through

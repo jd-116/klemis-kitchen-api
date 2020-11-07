@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi"
 	"github.com/lithammer/fuzzysearch/fuzzy"
 
+	"github.com/jd-116/klemis-kitchen-api/auth"
 	"github.com/jd-116/klemis-kitchen-api/db"
 	"github.com/jd-116/klemis-kitchen-api/products"
 	"github.com/jd-116/klemis-kitchen-api/types"
@@ -22,6 +23,13 @@ func Routes(database db.Provider, products products.Provider) *chi.Mux {
 	router := chi.NewRouter()
 	router.Get("/", GetAll(database, database, products))
 	router.Get("/{id}", GetSingle(database, database, products))
+
+	// Admin-only routes
+	router.Group(func(r chi.Router) {
+		// Ensure the user has access
+		r.Use(auth.AdminAuthenticated)
+		r.Patch("/{id}", Update(database))
+	})
 	return router
 }
 
@@ -221,5 +229,83 @@ func GetSingle(productMetadataProvider db.ProductMetadataProvider, locationProvi
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write(jsonResponse)
+	}
+}
+
+// Update updates a products metadata in the database
+func Update(productMetadataProvider db.ProductMetadataProvider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+		if id == "" {
+			util.ErrorWithCode(w, errors.New("the URL parameter is empty"),
+				http.StatusBadRequest)
+			return
+		}
+
+		productMetadata, err := productMetadataProvider.GetProduct(r.Context(), id)
+		if err != nil {
+			// Continue with partial product
+			productMetadata = nil
+		}
+
+		if productMetadata != nil {
+			partial := make(map[string]interface{})
+			err := json.NewDecoder(r.Body).Decode(&partial)
+			if err != nil {
+				util.Error(w, err)
+				return
+			}
+
+			updated, err := productMetadataProvider.UpdateProduct(r.Context(), id, partial)
+			if err != nil {
+				util.Error(w, err)
+				return
+			}
+
+			// Return the updated product metadata as the top-level JSON
+			jsonResponse, err := json.Marshal(updated)
+			if err != nil {
+				util.ErrorWithCode(w, err, http.StatusInternalServerError)
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			w.Write(jsonResponse)
+
+		} else {
+
+			var productMetadata types.ProductMetadata
+			err := json.NewDecoder(r.Body).Decode(&productMetadata)
+			if err != nil {
+				util.Error(w, err)
+				return
+			}
+
+			productMetadata.ID = strings.TrimSpace(id)
+			if productMetadata.ID == "" {
+				util.ErrorWithCode(w, errors.New("productMetadata ID cannot be empty"),
+					http.StatusBadRequest)
+				return
+			}
+
+			err = productMetadataProvider.CreateProduct(r.Context(), productMetadata)
+			if err != nil {
+				util.Error(w, err)
+				return
+			}
+
+			// Return the updated product metadata as the top-level JSON
+			jsonResponse, err := json.Marshal(productMetadata)
+			if err != nil {
+				util.ErrorWithCode(w, err, http.StatusInternalServerError)
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			w.Write(jsonResponse)
+
+		}
 	}
 }

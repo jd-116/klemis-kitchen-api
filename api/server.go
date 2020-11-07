@@ -76,10 +76,9 @@ func (a *APIServer) Connect(ctx context.Context) error {
 	if err != nil {
 		log.Println("could not authenticate with the Transact API")
 		return err
-	} else {
-		log.Printf("successfully authenticated with the Transact API version %s\n",
-			a.itemProvider.Scraper.ClientVersion)
 	}
+	log.Printf("successfully authenticated with the Transact API version %s\n",
+		a.itemProvider.Scraper.ClientVersion)
 
 	// Connect to the MongoDB database
 	log.Println("initializing MongoDB database provider")
@@ -87,9 +86,8 @@ func (a *APIServer) Connect(ctx context.Context) error {
 	if err != nil {
 		log.Println("could not disconnect to the database")
 		return err
-	} else {
-		log.Println("successfully connected to and pinged the database")
 	}
+	log.Println("successfully connected to and pinged the database")
 
 	return nil
 }
@@ -100,17 +98,15 @@ func (a *APIServer) Disconnect(ctx context.Context) error {
 	if err != nil {
 		log.Println("could not disconnect from the database")
 		return err
-	} else {
-		log.Println("disconnected from the database")
 	}
+	log.Println("disconnected from the database")
 
 	err = a.itemProvider.Disconnect(ctx)
 	if err != nil {
 		log.Println("could not disconnect from the Transact API")
 		return err
-	} else {
-		log.Println("disconnected from the Transact API")
 	}
+	log.Println("disconnected from the Transact API")
 
 	return nil
 }
