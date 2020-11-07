@@ -18,20 +18,23 @@ import (
 	"github.com/jd-116/klemis-kitchen-api/api/locations"
 	"github.com/jd-116/klemis-kitchen-api/api/memberships"
 	apiProducts "github.com/jd-116/klemis-kitchen-api/api/products"
+	apiUpload "github.com/jd-116/klemis-kitchen-api/api/upload"
 	"github.com/jd-116/klemis-kitchen-api/auth"
 	"github.com/jd-116/klemis-kitchen-api/cas"
 	"github.com/jd-116/klemis-kitchen-api/db/mongo"
 	"github.com/jd-116/klemis-kitchen-api/products/transact"
+	"github.com/jd-116/klemis-kitchen-api/upload/s3"
 )
 
 // APIServer is a struct that bundles together the various server-wide
 // resources used at runtime that each have
 // a lifecycle of initialization, connection, and disconnection
 type APIServer struct {
-	itemProvider *transact.Provider
-	dbProvider   *mongo.Provider
-	casProvider  *cas.Provider
-	jwtManager   *auth.JWTManager
+	itemProvider   *transact.Provider
+	dbProvider     *mongo.Provider
+	casProvider    *cas.Provider
+	jwtManager     *auth.JWTManager
+	uploadProvider *s3.Provider
 }
 
 // NewAPIServer initializes the struct and all constituent components
@@ -60,11 +63,18 @@ func NewAPIServer() (*APIServer, error) {
 		return nil, err
 	}
 
+	// Initialize the S3 handler
+	uploadProvider, err := s3.NewProvider()
+	if err != nil {
+		return nil, err
+	}
+
 	return &APIServer{
 		itemProvider,
 		dbProvider,
 		casProvider,
 		jwtManager,
+		uploadProvider,
 	}, nil
 }
 
@@ -183,6 +193,7 @@ func (a *APIServer) routes() *chi.Mux {
 			r.Mount("/products", apiProducts.Routes(a.dbProvider, a.itemProvider))
 			r.Mount("/locations", locations.Routes(a.dbProvider, a.itemProvider))
 			r.Mount("/memberships", memberships.Routes(a.dbProvider))
+			r.Mount("/upload", apiUpload.Routes(a.uploadProvider))
 		})
 	})
 

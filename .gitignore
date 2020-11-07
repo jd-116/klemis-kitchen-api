@@ -1,2 +1,8 @@
 # Ignore the real `.env` file
 .env
+
+# Ignore the binary created with api
+api/klemis-kitchen-api
+
+# Ignore temp files
+out
