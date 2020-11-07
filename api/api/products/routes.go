@@ -305,7 +305,6 @@ func Update(productMetadataProvider db.ProductMetadataProvider) http.HandlerFunc
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			w.Write(jsonResponse)
-
 		}
 	}
 }

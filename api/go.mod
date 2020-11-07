@@ -4,6 +4,8 @@ go 1.15
 
 require (
 	github.com/antchfx/htmlquery v1.2.3
+	github.com/aws/aws-sdk-go v1.29.15
+	github.com/c2h5oh/datasize v0.0.0-20200825124411-48ed595a09d2
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/go-chi/cors v1.1.1

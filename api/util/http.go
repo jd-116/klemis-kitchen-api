@@ -3,6 +3,7 @@ package util
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 
@@ -65,6 +66,7 @@ func ErrorWithCode(w http.ResponseWriter, originalError error, statusCode int) {
 		Message: fmt.Sprint(originalError),
 	}
 
+	log.Printf("Error while handling HTTP request: %s\n", originalError)
 	jsonResponse, err := json.Marshal(response)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

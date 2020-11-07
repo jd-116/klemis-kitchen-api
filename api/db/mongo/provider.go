@@ -83,7 +83,7 @@ func (p *Provider) Connect(ctx context.Context) error {
 	return nil
 }
 
-// Disconnect terminates the connection to the MongODB server
+// Disconnect terminates the connection to the MongoDB server
 func (p *Provider) Disconnect(ctx context.Context) error {
 	err := p.client.Disconnect(ctx)
 	if err != nil {
