@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"mime/multipart"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -94,7 +95,7 @@ func (p *Provider) UploadFormMultipart(ctx context.Context, part *multipart.Part
 	if err != nil {
 		return "", err
 	}
-	fileName := fmt.Sprintf("%s.%s", fileID, ext)
+	fileName := fmt.Sprintf("%s.%s", fileID, strings.TrimPrefix(ext, "."))
 	log.Printf("uploading file '%s'\n", fileName)
 
 	// Upload the file to S3
