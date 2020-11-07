@@ -101,19 +101,19 @@ func Upload(uploadProvider upload.Provider, validMime func(string) bool) http.Ha
 
 		// Make sure the MIME type is valid
 		// Only the first 512 bytes are used to sniff the content type,
-		// so create a TeeReader
-		var buf bytes.Buffer
-		tee := io.TeeReader(uploadFile, &buf)
-		buffer := make([]byte, 512)
-		_, err = tee.Read(buffer)
+		// so create a multi-reader to pass the file on
+		headerBuffer := make([]byte, 512)
+		_, err = uploadFile.Read(headerBuffer)
 		if err != nil {
 			util.Error(w, err)
 			return
 		}
+		headerReader := bytes.NewReader(headerBuffer)
+		fileReader := io.MultiReader(headerReader, uploadFile)
 
 		// Use the net/http package's handy DetectContentType function. Always returns a valid
 		// content-type by returning "application/octet-stream" if no others seemed to match.
-		contentType := http.DetectContentType(buffer)
+		contentType := http.DetectContentType(headerBuffer)
 		if contentType == "application/octet-stream" || !validMime(contentType) {
 			util.ErrorWithCode(w,
 				fmt.Errorf("Unsupported file upload MIME type '%s'", contentType),
@@ -136,7 +136,7 @@ func Upload(uploadProvider upload.Provider, validMime func(string) bool) http.Ha
 		fileExt := fileExtensions[0]
 
 		// Stream the file into the upload provider
-		fileURL, err := uploadProvider.UploadFormMultipart(r.Context(), uploadFile, fileExt)
+		fileURL, err := uploadProvider.Upload(r.Context(), fileReader, fileExt, contentType)
 		if err != nil {
 			util.Error(w, err)
 			return

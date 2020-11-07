@@ -2,11 +2,11 @@ package upload
 
 import (
 	"context"
-	"mime/multipart"
+	"io"
 )
 
 // Provider represents a S3 provider implementation
 type Provider interface {
 	MaxBytes() int64
-	UploadFormMultipart(ctx context.Context, part *multipart.Part, ext string) (string, error)
+	Upload(ctx context.Context, part io.Reader, ext string, mime string) (string, error)
 }

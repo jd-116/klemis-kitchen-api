@@ -3,8 +3,8 @@ package s3
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
-	"mime/multipart"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -86,10 +86,9 @@ func (p *Provider) MaxBytes() int64 {
 	return p.maxBytes
 }
 
-// UploadFormMultipart uploads an image to S3
-// that is sent via a multipart request body,
+// Upload an image to S3,
 // returning the URL of the file once uploaded
-func (p *Provider) UploadFormMultipart(ctx context.Context, part *multipart.Part, ext string) (string, error) {
+func (p *Provider) Upload(ctx context.Context, part io.Reader, ext string, mime string) (string, error) {
 	// Generate the filename using a random ID
 	fileID, err := ksuid.NewRandom()
 	if err != nil {
@@ -100,9 +99,10 @@ func (p *Provider) UploadFormMultipart(ctx context.Context, part *multipart.Part
 
 	// Upload the file to S3
 	result, err := p.uploader.UploadWithContext(ctx, &s3manager.UploadInput{
-		Bucket: aws.String(p.bucket),
-		Key:    aws.String(fileName),
-		Body:   part,
+		Bucket:      aws.String(p.bucket),
+		Key:         aws.String(fileName),
+		ContentType: aws.String(mime),
+		Body:        part,
 	})
 	if err != nil {
 		return "", err
