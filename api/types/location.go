@@ -1,7 +1,5 @@
 package types
 
-import "time"
-
 // Location is the internal representation of a location object,
 // taken directly from MongoDB.
 // Note: this struct should not be returned from the API directly;
