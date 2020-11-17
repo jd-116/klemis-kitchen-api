@@ -10,7 +10,6 @@ type Location struct {
 	TransactIdentifier string         `json:"transact_identifier" bson:"transact_identifier"`
 	ID                 string         `json:"id" bson:"id"`
 	Name               string         `json:"name" bson:"name"`
-	LastDelivery       *time.Time     `json:"last_delivery" bson:"last_delivery"`
 	Location           GeoCoordinates `json:"location" bson:"location"`
 }
 
@@ -19,7 +18,6 @@ func (l *Location) Inner() LocationMetadata {
 	return LocationMetadata{
 		ID:           l.ID,
 		Name:         l.Name,
-		LastDelivery: l.LastDelivery,
 		Location:     l.Location,
 	}
 }
@@ -28,7 +26,6 @@ func (l *Location) Inner() LocationMetadata {
 type LocationMetadata struct {
 	ID           string         `json:"id"`
 	Name         string         `json:"name"`
-	LastDelivery *time.Time     `json:"last_delivery"`
 	Location     GeoCoordinates `json:"location"`
 }
 
