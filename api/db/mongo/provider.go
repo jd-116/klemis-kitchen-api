@@ -221,8 +221,9 @@ func (p *Provider) GetMembership(ctx context.Context, username string) (*types.M
 func (p *Provider) GetAllAnnouncements(ctx context.Context) ([]types.Announcement, error) {
 	collection := p.announcements()
 
+	// Sort the announcements by their timestamp (descending)
 	options := options.Find()
-	options.SetSort(bson.D{{Key: "id", Value: 1}})
+	options.SetSort(bson.D{{Key: "timestamp", Value: -1}})
 	cursor, err := collection.Find(ctx, bson.D{}, options)
 	if err != nil {
 		return nil, err
