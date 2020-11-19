@@ -104,6 +104,7 @@ func Create(announcementProvider db.AnnouncementProvider) http.HandlerFunc {
 			Timestamp: announcementCreate.Timestamp,
 		}
 
+		// Generate globally unique IDs for the announcement
 		for {
 			rand, err := ksuid.NewRandom()
 			if err != nil {

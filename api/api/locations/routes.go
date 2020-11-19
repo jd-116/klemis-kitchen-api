@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi"
 	"github.com/lithammer/fuzzysearch/fuzzy"
+	"github.com/segmentio/ksuid"
 
 	"github.com/jd-116/klemis-kitchen-api/auth"
 	"github.com/jd-116/klemis-kitchen-api/db"
@@ -258,43 +259,59 @@ func GetProduct(locationProvider db.LocationProvider, productMetadataProvider db
 // Create creates a new location in the database
 func Create(locationProvider db.LocationProvider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var location types.Location
-		err := json.NewDecoder(r.Body).Decode(&location)
+		var locationCreate types.LocationCreate
+		err := json.NewDecoder(r.Body).Decode(&locationCreate)
 		if err != nil {
 			util.Error(w, err)
 			return
 		}
 
-		location.ID = strings.TrimSpace(location.ID)
-		if location.ID == "" {
-			util.ErrorWithCode(w, errors.New("location ID cannot be empty"),
-				http.StatusBadRequest)
-			return
-		}
-
-		location.Name = strings.TrimSpace(location.Name)
-		if location.Name == "" {
+		locationCreate.Name = strings.TrimSpace(locationCreate.Name)
+		if locationCreate.Name == "" {
 			util.ErrorWithCode(w, errors.New("location Name cannot be empty"),
 				http.StatusBadRequest)
 			return
 		}
 
-		err = locationProvider.CreateLocation(r.Context(), location)
-		if err != nil {
-			util.Error(w, err)
-			return
+		location := types.Location{
+			Name:               locationCreate.Name,
+			Location:           locationCreate.Location,
+			TransactIdentifier: locationCreate.TransactIdentifier,
 		}
 
-		// Return the single location as the top-level JSON
-		jsonResponse, err := json.Marshal(location)
-		if err != nil {
-			util.ErrorWithCode(w, err, http.StatusInternalServerError)
-			return
-		}
+		// Generate globally unique IDs for the location
+		for {
+			rand, err := ksuid.NewRandom()
+			if err != nil {
+				util.Error(w, err)
+				return
+			}
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		w.Write(jsonResponse)
+			location.ID = rand.String()
+
+			err = locationProvider.CreateLocation(r.Context(), location)
+			if err != nil {
+				// If the error was a duplicate ID; try again
+				if _, ok := err.(*db.DuplicateIDError); ok {
+					continue
+				} else {
+					util.Error(w, err)
+					return
+				}
+			} else {
+				// Return the single location as the top-level JSON
+				jsonResponse, err := json.Marshal(location)
+				if err != nil {
+					util.ErrorWithCode(w, err, http.StatusInternalServerError)
+					return
+				}
+
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusCreated)
+				w.Write(jsonResponse)
+				return
+			}
+		}
 	}
 }
 

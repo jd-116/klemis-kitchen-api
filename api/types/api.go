@@ -12,6 +12,6 @@ type Session struct {
 	Username     string    `json:"username"`
 	FirstName    string    `json:"first_name"`
 	LastName     string    `json:"last_name"`
-	IssuedAt     time.Time `json:"message"`
+	IssuedAt     time.Time `json:"issued_at"`
 	ExpiresAfter *int64    `json:"expires_after"`
 }
