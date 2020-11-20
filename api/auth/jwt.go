@@ -203,7 +203,7 @@ func (m *JWTManager) verifier() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
-			token, err := m.verifyRequest(r, jwtauth.TokenFromCookie)
+			token, err := m.verifyRequest(r, jwtauth.TokenFromHeader)
 			ctx = jwtauth.NewContext(ctx, token, err)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
