@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -166,12 +167,14 @@ func AdminAuthenticated(next http.Handler) http.Handler {
 
 		_, claims, err := FromContext(r.Context())
 		if err != nil {
+			log.Printf("error when getting claims from context: %s\n", err)
 			unauthorized(w)
 			return
 		}
 
 		// Make sure the user has admin access
 		if !claims.Permissions.AdminAccess {
+			log.Println("user lacks admin access")
 			unauthorized(w)
 			return
 		}
@@ -204,11 +207,13 @@ func authenticator(next http.Handler) http.Handler {
 		token, _, err := FromContext(r.Context())
 
 		if err != nil {
+			log.Printf("error when getting token from context: %s\n", err)
 			unauthorized(w)
 			return
 		}
 
 		if token == nil || !token.Valid {
+			log.Println("token is nil or invalid")
 			unauthorized(w)
 			return
 		}
