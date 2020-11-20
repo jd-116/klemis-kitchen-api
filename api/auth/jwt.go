@@ -6,8 +6,6 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"os"
-	"strings"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
@@ -20,9 +18,9 @@ import (
 
 // JWTManager contains the secret loaded from the environment
 type JWTManager struct {
-	Auth       *jwtauth.JWTAuth
-	secret     []byte
-	BypassAuth bool
+	signer jwt.SigningMethod
+	parser *jwt.Parser
+	secret []byte
 }
 
 // Claims contains the data used to store a JWT's associated session info
@@ -84,14 +82,6 @@ func NewJWTManager() (*JWTManager, error) {
 		return nil, err
 	}
 
-	// Try to see if the server should bypass authentication
-	bypassAuth := false
-	if value, ok := os.LookupEnv("AUTH_BYPASS"); ok {
-		if strings.TrimSpace(value) == "1" {
-			bypassAuth = true
-		}
-	}
-
 	// Parse the string into bytes
 	encoding := base64.StdEncoding.WithPadding(base64.StdPadding)
 	secretBytes, err := encoding.DecodeString(jwtSecretStr)
@@ -99,13 +89,10 @@ func NewJWTManager() (*JWTManager, error) {
 		return nil, err
 	}
 
-	// Create the instance of the auth used for middleware
-	tokenAuth := jwtauth.New("HS256", secretBytes, nil)
-
 	return &JWTManager{
-		Auth:       tokenAuth,
-		secret:     secretBytes,
-		BypassAuth: bypassAuth,
+		signer: jwt.GetSigningMethod("H256"),
+		parser: &jwt.Parser{},
+		secret: secretBytes,
 	}, nil
 }
 
@@ -136,20 +123,8 @@ const BypassAuthContextKey key = iota
 // sending appropriate status codes upon failure.
 func (m *JWTManager) Authenticated() func(http.Handler) http.Handler {
 	// Seek, verify and validate JWT tokens
-	verifier := jwtauth.Verify(m.Auth, jwtauth.TokenFromHeader)
+	verifier := m.verifier()
 	return func(next http.Handler) http.Handler {
-		if m.BypassAuth {
-			// Skip authentication
-			verified := verifier(next)
-			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				// Attach a value to the context
-				ctx := context.WithValue(r.Context(), BypassAuthContextKey, true)
-
-				// Pass it through
-				verified.ServeHTTP(w, r.WithContext(ctx))
-			})
-		}
-
 		// Compose the verifier and authenticator functions
 		return verifier(authenticator(next))
 	}
@@ -159,12 +134,6 @@ func (m *JWTManager) Authenticated() func(http.Handler) http.Handler {
 // and is authorized (has sufficient permissions) to access admin resources
 func AdminAuthenticated(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if value, ok := r.Context().Value(BypassAuthContextKey).(bool); ok && value == true {
-			// Skip authentication
-			next.ServeHTTP(w, r)
-			return
-		}
-
 		_, claims, err := FromContext(r.Context())
 		if err != nil {
 			log.Printf("error when getting claims from context: %s\n", err)
@@ -227,4 +196,66 @@ func authenticator(next http.Handler) http.Handler {
 func unauthorized(w http.ResponseWriter) {
 	util.ErrorWithCode(w, errors.New("user is not authorized to access resource"),
 		http.StatusUnauthorized)
+}
+
+// verifier is an HTTP middleware that verifies the JWT token in a request
+func (m *JWTManager) verifier() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			token, err := m.verifyRequest(r, jwtauth.TokenFromCookie)
+			ctx = jwtauth.NewContext(ctx, token, err)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+// verifyRequest attempts to parse the JWT token ina  request
+func (m *JWTManager) verifyRequest(r *http.Request,
+	findTokenFns ...func(r *http.Request) string) (*jwt.Token, error) {
+
+	var tokenStr string
+	var err error
+
+	// Extract token string from the request by calling token find functions in
+	// the order they where provided. Further extraction stops if a function
+	// returns a non-empty string.
+	for _, fn := range findTokenFns {
+		tokenStr = fn(r)
+		if tokenStr != "" {
+			break
+		}
+	}
+	if tokenStr == "" {
+		return nil, jwtauth.ErrNoTokenFound
+	}
+
+	// Verify the token
+	keyFunc := func(t *jwt.Token) (interface{}, error) { return m.secret, nil }
+	token, err := m.parser.ParseWithClaims(tokenStr, &Claims{}, keyFunc)
+	if err != nil {
+		if verr, ok := err.(*jwt.ValidationError); ok {
+			if verr.Errors&jwt.ValidationErrorExpired > 0 {
+				return token, jwtauth.ErrExpired
+			} else if verr.Errors&jwt.ValidationErrorIssuedAt > 0 {
+				return token, jwtauth.ErrIATInvalid
+			} else if verr.Errors&jwt.ValidationErrorNotValidYet > 0 {
+				return token, jwtauth.ErrNBFInvalid
+			}
+		}
+		return token, err
+	}
+
+	if token == nil || !token.Valid {
+		err = jwtauth.ErrUnauthorized
+		return token, err
+	}
+
+	// Verify signing algorithm
+	if token.Method != m.signer {
+		return token, jwtauth.ErrAlgoInvalid
+	}
+
+	// Valid!
+	return token, nil
 }
