@@ -90,7 +90,7 @@ func NewJWTManager() (*JWTManager, error) {
 	}
 
 	return &JWTManager{
-		signer: jwt.GetSigningMethod("H256"),
+		signer: jwt.GetSigningMethod("HS256"),
 		parser: &jwt.Parser{},
 		secret: secretBytes,
 	}, nil
