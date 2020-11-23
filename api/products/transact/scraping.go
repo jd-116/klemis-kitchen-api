@@ -486,7 +486,7 @@ func collectText(n *html.Node, buf *bytes.Buffer) {
 }
 
 // Attempts to get a new authentication token by sending a request to the login route
-// usingurren the ct session cookie
+// using the current session cookie
 func (s *Scraper) getAuthenticationToken() (string, error) {
 	url := s.baseURL + "/QPWebOffice-Web-AuthenticationService.svc/JSON/Authenticate"
 	method := "POST"
