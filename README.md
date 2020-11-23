@@ -60,6 +60,7 @@ Finally, to run the API server, run:
 docker run -d \
     --name klemis-kitchen-api \
     --env-file ./.env \
+    --env SERVER_PORT=8080 \
     klemis-kitchen-api:latest
 ```
 
