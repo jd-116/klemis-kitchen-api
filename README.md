@@ -61,6 +61,7 @@ docker run -d \
     --name klemis-kitchen-api \
     --env-file ./.env \
     --env SERVER_PORT=8080 \
+    --publish 8080:8080 \
     klemis-kitchen-api:latest
 ```
 
