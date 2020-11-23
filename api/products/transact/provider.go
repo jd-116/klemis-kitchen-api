@@ -3,6 +3,7 @@ package transact
 import (
 	"context"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,12 +23,15 @@ type Provider struct {
 	stopReloadSession chan struct{}
 
 	// Config values
-	fetchPeriod         time.Duration
-	reloadSessionPeriod time.Duration
-	productClassName    string
-	csvReportName       string
-	reportPollPeriod    time.Duration
-	reportPollTimeout   time.Duration
+	fetchPeriod                   time.Duration
+	reloadSessionPeriod           time.Duration
+	csvReportName                 string
+	reportPollPeriod              time.Duration
+	reportPollTimeout             time.Duration
+	csvReportIDColumnOffset       int
+	csvReportNameColumnOffset     int
+	csvReportQuantityColumnOffset int
+	profitCenterPrefix            string
 
 	*Scraper
 	*products.Cache
@@ -67,11 +71,6 @@ func NewProvider() (*Provider, error) {
 		return nil, err
 	}
 
-	productClassName, err := env.GetEnv("Transact product class name", "TRANSACT_PRODUCT_CLASS_NAME")
-	if err != nil {
-		return nil, err
-	}
-
 	csvReportName, err := env.GetEnv("Transact CSV favorite report name", "TRANSACT_CSV_FAVORITE_REPORT_NAME")
 	if err != nil {
 		return nil, err
@@ -87,6 +86,26 @@ func NewProvider() (*Provider, error) {
 		return nil, err
 	}
 
+	csvReportIDColumnOffset, err := env.GetIntEnv("Transact CSV report ID column offset from 'Profit Center - '", "TRANSACT_CSV_REPORT_ID_COLUMN_OFFSET")
+	if err != nil {
+		return nil, err
+	}
+
+	csvReportNameColumnOffset, err := env.GetIntEnv("Transact CSV report name column offset from 'Profit Center - '", "TRANSACT_CSV_REPORT_NAME_COLUMN_OFFSET")
+	if err != nil {
+		return nil, err
+	}
+
+	csvReportQuantityColumnOffset, err := env.GetIntEnv("Transact CSV report quantity column offset from 'Profit Center - '", "TRANSACT_CSV_REPORT_QTY_COLUMN_OFFSET")
+	if err != nil {
+		return nil, err
+	}
+
+	profitCenterPrefix, err := env.GetEnv("Transact CSV report profit center prefix", "TRANSACT_PROFIT_CENTER_PREFIX")
+	if err != nil {
+		return nil, err
+	}
+
 	// Create the scraper
 	scraper, err := NewScraper(baseURL, tenant, username, password)
 	if err != nil {
@@ -97,12 +116,15 @@ func NewProvider() (*Provider, error) {
 		stopFetch:         make(chan struct{}),
 		stopReloadSession: make(chan struct{}),
 
-		fetchPeriod:         fetchPeriod,
-		reloadSessionPeriod: reloadSessionPeriod,
-		productClassName:    productClassName,
-		csvReportName:       csvReportName,
-		reportPollPeriod:    reportPollPeriod,
-		reportPollTimeout:   reportPollTimeout,
+		fetchPeriod:                   fetchPeriod,
+		reloadSessionPeriod:           reloadSessionPeriod,
+		csvReportName:                 csvReportName,
+		reportPollPeriod:              reportPollPeriod,
+		reportPollTimeout:             reportPollTimeout,
+		csvReportIDColumnOffset:       csvReportIDColumnOffset,
+		csvReportNameColumnOffset:     csvReportNameColumnOffset,
+		csvReportQuantityColumnOffset: csvReportQuantityColumnOffset,
+		profitCenterPrefix:            profitCenterPrefix,
 
 		Scraper: scraper,
 		Cache:   &products.Cache{},
@@ -143,9 +165,9 @@ func (p *Provider) periodFetch() {
 // Attempts to fetch and reload the cache,
 // printing out an error if it occurs
 func (p *Provider) tryFetch(delayUntilNext string) {
-	// TODO replace this
-	// Fetch a list of partial products from the Transact API
-	rawPartialProducts, err := p.Scraper.GetItemsForClass(p.productClassName)
+	// Fetch a list of partial products from the Transact API via a report
+	reportRows, err := p.Scraper.GetInventoryCSV(p.csvReportName,
+		p.reportPollPeriod, p.reportPollTimeout)
 	if err != nil {
 		// Report error,
 		// but continue the goroutine
@@ -154,67 +176,83 @@ func (p *Provider) tryFetch(delayUntilNext string) {
 		return
 	}
 
-	// log.Printf("scraped %d -> %d raw items from the Transact API\n", originalCount, len(items))
-	tempCsvData
-
-	// Build the cache map
+	// Parse each CSV row individually -- there are no headers :)
 	productsMap := make(map[string]map[string]products.PartialProduct)
 	totalLoaded := 0
-	for _, partialProduct := range rawPartialProducts {
-		// TODO remove hard-coded location identifier once
-		// location matching is implemented
-		location := "main_quad"
+	for _, csvRow := range reportRows {
+		result := p.parseCSVRow(csvRow)
+		if result == nil {
+			continue
+		}
 
 		// Initialize the inner map if needed
+		location := result.LocationIdentifier
 		if _, ok := productsMap[location]; !ok {
 			productsMap[location] = make(map[string]products.PartialProduct)
 		}
 
-		// Construct the partial product by parsing it
-		rawName, nameOk := partialProduct["label"]
-		rawID, idOk := partialProduct["number"]
-		if !(nameOk && idOk) {
-			continue
-		}
-
-		// Parse name/id to string
-		name, nameOk := rawName.(string)
-		id, idOk := rawID.(string)
-		if !(nameOk && idOk) {
-			continue
-		}
-
-		name = strings.TrimSpace(name)
-		id = strings.TrimSpace(id)
-		if name == "" || id == "" {
-			continue
-		}
-
-		// Parse the amount (optional)
-		amount := 0
-		if rawAmount, ok := partialProduct["total_on_hand"]; ok && rawAmount != nil {
-			// Load the amount if it is a number and is greater than 0
-			if amountFloat, ok := rawAmount.(float64); ok && amountFloat > 0 {
-				amount = int(amountFloat)
-			}
-		}
-
-		product := products.PartialProduct{
-			Name:   name,
-			ID:     id,
-			Amount: amount,
-		}
-
 		// Load the product into the cache
-		productsMap[location][product.ID] = product
+		productsMap[location][result.PartialProduct.ID] = result.PartialProduct
 		totalLoaded++
 	}
 
+	log.Printf("scraped %d -> %d raw items from the Transact API\n", len(reportRows), totalLoaded)
 	log.Printf("reloaded Transact API partial product cache (%d total); fetching again in %s\n",
 		totalLoaded, delayUntilNext)
 
 	// Load the products into the cache
 	p.Cache.Load(productsMap)
+}
+
+type parseResult struct {
+	products.PartialProduct
+	LocationIdentifier string
+}
+
+func (p *Provider) parseCSVRow(row []string) *parseResult {
+	// Scan each cell until it sees the profit center prefix
+	for i, cell := range row {
+		if strings.HasPrefix(cell, p.profitCenterPrefix) {
+			locName := strings.TrimPrefix(cell, p.profitCenterPrefix)
+
+			// Ensure array accesses are within bounds
+			if i+p.csvReportNameColumnOffset >= len(row) ||
+				i+p.csvReportIDColumnOffset >= len(row) ||
+				i+p.csvReportQuantityColumnOffset >= len(row) {
+				return nil
+			}
+
+			name := row[i+p.csvReportNameColumnOffset]
+			id := row[i+p.csvReportIDColumnOffset]
+			if name == "" || id == "" {
+				return nil
+			}
+
+			amountRaw := row[i+p.csvReportQuantityColumnOffset]
+			amount, err := strconv.Atoi(amountRaw)
+			if err != nil {
+				return nil
+			}
+
+			// Don't let negative item amounts get past parsing
+			if amount < 0 {
+				amount = 0
+			}
+
+			product := products.PartialProduct{
+				Name:   name,
+				ID:     id,
+				Amount: amount,
+			}
+
+			return &parseResult{
+				PartialProduct:     product,
+				LocationIdentifier: locName,
+			}
+		}
+	}
+
+	return nil
 }
 
 // Periodically reloads the session
