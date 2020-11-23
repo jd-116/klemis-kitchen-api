@@ -5,7 +5,7 @@
 >
 > Created as a part of the multi-part GT CS Junior Design course in the Spring and Fall of 2020.
 
-## ℹ️ Release Notes
+## 📃 Release Notes
 
 **Current version**: v0.1.0
 
