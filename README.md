@@ -7,13 +7,18 @@
 
 ## 📃 Release Notes
 
-**Current version**: v0.1.0
-
-### Changelog
+**Current version**: v0.1.1
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
-#### v0.1.0 - Initial Release (2020-11-22)
+### v0.1.1 - Locations Patch (2020-11-23)
+
+#### Added
+
+-   Support added for multiple locations, with Transact API scraping now properly detecting and separating items based on locations
+-   (internal) Switched to a CSV-report-based scraping tool instead of directly requesting the inventory table. While more roundabout, this allows us to correctly obtain the location information reliably
+
+### v0.1.0 - Initial Release (2020-11-22)
 
 #### Added
 
@@ -32,6 +37,7 @@ More details about the API routes can be found at the wiki page: [API Design](ht
 #### Known Issues
 
 -   The current Docker-based hosting pattern occasionally sees transient connection issues in our staging environment that we're unsure of the cause. This may be related to the networking setup of the staging environment.
+-   The API currently only supports a single location
 
 ---
 
