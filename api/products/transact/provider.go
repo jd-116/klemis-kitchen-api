@@ -25,6 +25,9 @@ type Provider struct {
 	fetchPeriod         time.Duration
 	reloadSessionPeriod time.Duration
 	productClassName    string
+	csvReportName       string
+	reportPollPeriod    time.Duration
+	reportPollTimeout   time.Duration
 
 	*Scraper
 	*products.Cache
@@ -69,6 +72,21 @@ func NewProvider() (*Provider, error) {
 		return nil, err
 	}
 
+	csvReportName, err := env.GetEnv("Transact CSV favorite report name", "TRANSACT_CSV_FAVORITE_REPORT_NAME")
+	if err != nil {
+		return nil, err
+	}
+
+	reportPollPeriod, err := env.GetDurationEnv("Transact API report poll period", "TRANSACT_REPORT_POLL_PERIOD")
+	if err != nil {
+		return nil, err
+	}
+
+	reportPollTimeout, err := env.GetDurationEnv("Transact API report poll timeout", "TRANSACT_REPORT_POLL_TIMEOUT")
+	if err != nil {
+		return nil, err
+	}
+
 	// Create the scraper
 	scraper, err := NewScraper(baseURL, tenant, username, password)
 	if err != nil {
@@ -82,6 +100,9 @@ func NewProvider() (*Provider, error) {
 		fetchPeriod:         fetchPeriod,
 		reloadSessionPeriod: reloadSessionPeriod,
 		productClassName:    productClassName,
+		csvReportName:       csvReportName,
+		reportPollPeriod:    reportPollPeriod,
+		reportPollTimeout:   reportPollTimeout,
 
 		Scraper: scraper,
 		Cache:   &products.Cache{},
@@ -122,6 +143,7 @@ func (p *Provider) periodFetch() {
 // Attempts to fetch and reload the cache,
 // printing out an error if it occurs
 func (p *Provider) tryFetch(delayUntilNext string) {
+	// TODO replace this
 	// Fetch a list of partial products from the Transact API
 	rawPartialProducts, err := p.Scraper.GetItemsForClass(p.productClassName)
 	if err != nil {
@@ -131,6 +153,9 @@ func (p *Provider) tryFetch(delayUntilNext string) {
 		log.Println(err)
 		return
 	}
+
+	// log.Printf("scraped %d -> %d raw items from the Transact API\n", originalCount, len(items))
+	tempCsvData
 
 	// Build the cache map
 	productsMap := make(map[string]map[string]products.PartialProduct)
