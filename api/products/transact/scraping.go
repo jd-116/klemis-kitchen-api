@@ -2,16 +2,20 @@ package transact
 
 import (
 	"bytes"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"io"
 	"net/http"
 	"net/http/cookiejar"
+	"net/url"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/antchfx/htmlquery"
+	"github.com/hako/durafmt"
 	"golang.org/x/net/html"
 )
 
@@ -90,27 +94,225 @@ func (s *Scraper) ReloadSession() error {
 	return nil
 }
 
-// Expected JSON from items request
-type itemsWithInventoryResponse struct {
-	Result itemsWithInventoryResult `json:"GetItemsWithInventoryMainResult"`
+// GetInventoryCSV is a goroutine that goes through the process
+// of getting the inventory CSV via a report.
+// Returns each CSV row as a string slice
+func (s *Scraper) GetInventoryCSV(csvReportName string, pollPeriod time.Duration,
+	pollTimeout time.Duration, reportType string) ([][]string, error) {
+
+	// Get all favorite reports and then match the desired one
+	allFavoriteReports, err := s.getFavoriteReports()
+	if err != nil {
+		return nil, err
+	}
+
+	// Try to find a matching report
+	var matchedReport map[string]interface{} = nil
+	for _, favoriteReport := range allFavoriteReports {
+		if name, ok := favoriteReport["name"]; ok && name == csvReportName {
+			// Found
+			matchedReport = favoriteReport
+			break
+		}
+	}
+	if matchedReport == nil {
+		return nil, fmt.Errorf("no matching favorite report found for name '%s'", csvReportName)
+	}
+
+	// Now, submit the request to generate the report
+	reportFileName, err := s.submitAndWait(matchedReport, reportType, pollPeriod, pollTimeout)
+
+	// Download the report
+	reportContents, err := s.downloadReport(reportFileName)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse the CSV records
+	csvReader := csv.NewReader(strings.NewReader(reportContents))
+	csvReader.LazyQuotes = true
+	records, err := csvReader.ReadAll()
+	if err != nil {
+		return nil, err
+	}
+
+	return records, nil
 }
 
-type itemsWithInventoryResult struct {
-	Items []map[string]interface{} `json:"RootResults"`
-}
+// Submits a report generation request and polls until it is done,
+// returning the filename to the resultant report when done
+func (s *Scraper) submitAndWait(report map[string]interface{}, reportType string,
+	pollPeriod time.Duration, pollTimeout time.Duration) (string, error) {
 
-// GetItemsForClass attempts to get all items with inventory for the given item class name
-func (s *Scraper) GetItemsForClass(className string) ([]map[string]interface{}, error) {
-	// Get a lock on the session lock
 	s.Lock()
 	defer s.Unlock()
 
-	if !s.Ready {
-		// Cannot process request
-		return nil, errors.New("session has not been initialized")
+	reportNameRaw, ok := report["name"]
+	if !ok {
+		return "", errors.New("no 'name' field found on report")
+	}
+	reportName, ok := reportNameRaw.(string)
+	if !ok {
+		return "", errors.New("invalid 'name' field found on report")
 	}
 
-	url := s.baseURL + "/QPWebOffice-Web-QuadPointDomain.svc/JSON/GetItemsWithInventoryMain"
+	reportIDRaw, ok := report["id"]
+	if !ok {
+		return "", fmt.Errorf("no 'id' field found on report with name '%s'", reportName)
+	}
+	reportIDFloat, ok := reportIDRaw.(float64)
+	if !ok {
+		return "", fmt.Errorf("invalid 'id' field found on report with name '%s'", reportName)
+	}
+	reportID := int(reportIDFloat)
+
+	err := s.submitReport(report, reportType)
+	if err != nil {
+		return "", err
+	}
+
+	// Keep polling the API until the report is ready,
+	// and obtain the path from the response that indicates success
+	timeout := time.After(pollTimeout)
+	timeoutHumanDuration := durafmt.Parse(pollTimeout).LimitFirstN(2).String()
+	for {
+		select {
+		case <-timeout:
+			return "", fmt.Errorf("report polling for report with name '%s' timed out after %s",
+				reportName, timeoutHumanDuration)
+		case <-time.After(pollPeriod):
+			reportFile, err := s.isReportReady(reportID, reportName)
+			if err != nil {
+				return "", err
+			}
+
+			if reportFile == nil {
+				// Poll again after delay
+				continue
+			}
+
+			return *reportFile, nil
+		}
+	}
+}
+
+// downloadReport downloads a report file from the Transact API
+func (s *Scraper) downloadReport(reportName string) (string, error) {
+	s.Lock()
+	defer s.Unlock()
+
+	// Construct the report URL by escaping each path segment,
+	// but not the slashes between them
+	filename := "QuadPoint POS/" + reportName
+	segments := strings.Split(filename, "/")
+	escapedSegments := []string{}
+	for _, segment := range segments {
+		escapedSegments = append(escapedSegments, url.PathEscape(segment))
+	}
+	escapedFilename := strings.Join(escapedSegments, "/")
+	url := s.baseURL + "/BinaryDataService.svc/HistoryReport/" + escapedFilename + "/CSV"
+	url = url + "?jwthidden=" + s.authToken
+	method := "GET"
+
+	req, err := http.NewRequest(method, url, nil)
+	if err != nil {
+		return "", err
+	}
+
+	res, err := s.client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer res.Body.Close()
+
+	// Read the body into a string
+	buf := new(strings.Builder)
+	_, err = io.Copy(buf, res.Body)
+	if err != nil {
+		return "", err
+	}
+
+	return buf.String(), nil
+}
+
+type isReportReadyBody struct {
+	ScheduleID int `json:"scheduleId"`
+}
+
+type isReportReadyResponse struct {
+	Result isReportReadyResult `json:"IsReportReadyResult"`
+}
+
+type isReportReadyResult struct {
+	File    *string `json:"reportFile"`
+	Ready   bool    `json:"reportReady"`
+	Success bool    `json:"success"`
+}
+
+// isReportReady polls the Transact API to determine if the report is ready for downloading.
+// If it is, it returns the filename from the API, which can be used with downloadReport
+func (s *Scraper) isReportReady(reportID int, reportName string) (*string, error) {
+	// Create the isReportReady body JSON
+	isReportReadyRequestBody, err := json.Marshal(isReportReadyBody{ScheduleID: reportID})
+	if err != nil {
+		return nil, err
+	}
+
+	url := s.baseURL + "/QPWebOffice-Web-BusinessService.svc/JSON/IsReportReady"
+	method := "POST"
+
+	req, err := http.NewRequest(method, url, bytes.NewReader(isReportReadyRequestBody))
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Accept", "application/json")
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", s.authToken))
+	req.Header.Add("Content-Type", "application/json")
+
+	res, err := s.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != 200 {
+		return nil, fmt.Errorf("report polling for report '%s' failed", reportName)
+	}
+
+	// Decode response body
+	result := isReportReadyResponse{}
+	err = json.NewDecoder(res.Body).Decode(&result)
+	if err != nil {
+		return nil, err
+	}
+
+	// See if the report is ready or if it has failed
+	if !result.Result.Success {
+		return nil, fmt.Errorf("report creation for '%s' failed", reportName)
+	}
+	if result.Result.Ready && result.Result.File != nil {
+		return result.Result.File, nil
+	}
+
+	// Report isn't ready yet, but no error
+	return nil, nil
+}
+
+type favoriteReportsResponse struct {
+	Result favoriteReportsResult `json:"GetFavoritesResult"`
+}
+
+type favoriteReportsResult struct {
+	Items []map[string]interface{} `json:"RootResults"`
+}
+
+// getFavoriteReports gets all favorite reports
+func (s *Scraper) getFavoriteReports() ([]map[string]interface{}, error) {
+	s.Lock()
+	defer s.Unlock()
+
+	url := s.baseURL + "/QPWebOffice-Web-QuadPointDomain.svc/JSON/GetFavorites"
 	method := "GET"
 
 	req, err := http.NewRequest(method, url, nil)
@@ -127,24 +329,85 @@ func (s *Scraper) GetItemsForClass(className string) ([]map[string]interface{}, 
 	}
 	defer res.Body.Close()
 
-	// Parse JSON into expected shape
-	result := itemsWithInventoryResponse{}
+	result := favoriteReportsResponse{}
 	err = json.NewDecoder(res.Body).Decode(&result)
 	if err != nil {
 		return nil, err
 	}
 
-	// Filter items by class name
-	items := make([]map[string]interface{}, 0)
-	originalCount := len(result.Result.Items)
-	for _, resultItem := range result.Result.Items {
-		if itemClassName, ok := resultItem["class_name"]; ok && itemClassName == className {
-			items = append(items, resultItem)
+	return result.Result.Items, nil
+}
+
+type submitReportBody struct {
+	ChangeSet []submitReportChange `json:"changeSet"`
+}
+
+type submitReportChange struct {
+	Entity         map[string]interface{}     `json:"Entity"`
+	OriginalEntity submitReportOriginalEntity `json:"OriginalEntity"`
+	ID             int                        `json:"Id"`
+	Operation      int                        `json:"Operation"`
+}
+
+type submitReportOriginalEntity struct {
+	Type string `json:"__type"`
+}
+
+// submitReport sends the given report definition to the API
+// and requests it be generated.
+// Note: s.Mutex should be locked before calling this function
+func (s *Scraper) submitReport(reportDefinition map[string]interface{},
+	reportType string) error {
+
+	reportName := "unknown"
+	if name, ok := reportDefinition["name"]; ok {
+		if nameStr, ok := name.(string); ok {
+			reportName = nameStr
 		}
 	}
-	log.Printf("scraped %d -> %d raw items from the Transact API\n", originalCount, len(items))
 
-	return items, nil
+	// Create the submit report body JSON
+	reportDefinition["__type"] = reportType
+	body := submitReportBody{
+		// These values come from observing the requests in devtools
+		ChangeSet: []submitReportChange{{
+			ID:        0,
+			Operation: 3,
+			Entity:    reportDefinition,
+			OriginalEntity: submitReportOriginalEntity{
+				Type: reportType,
+			},
+		}},
+	}
+	submitReportRequestBody, err := json.Marshal(body)
+	if err != nil {
+		return err
+	}
+
+	url := s.baseURL + "/QPWebOffice-Web-QuadPointDomain.svc/JSON/SubmitChanges"
+	method := "POST"
+
+	req, err := http.NewRequest(method, url, bytes.NewReader(submitReportRequestBody))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Add("Accept", "application/json")
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", s.authToken))
+	req.Header.Add("Content-Type", "application/json")
+
+	res, err := s.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != 200 {
+		return fmt.Errorf("report submission for report '%s' failed", reportName)
+	}
+
+	// Report submission was successful
+	return nil
 }
 
 // Attempts to obtain a new session cookie from the Transact API,
