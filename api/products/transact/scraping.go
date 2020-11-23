@@ -98,7 +98,7 @@ func (s *Scraper) ReloadSession() error {
 // of getting the inventory CSV via a report.
 // Returns each CSV row as a string slice
 func (s *Scraper) GetInventoryCSV(csvReportName string, pollPeriod time.Duration,
-	pollTimeout time.Duration) ([][]string, error) {
+	pollTimeout time.Duration, reportType string) ([][]string, error) {
 
 	// Get all favorite reports and then match the desired one
 	allFavoriteReports, err := s.getFavoriteReports()
@@ -119,50 +119,8 @@ func (s *Scraper) GetInventoryCSV(csvReportName string, pollPeriod time.Duration
 		return nil, fmt.Errorf("no matching favorite report found for name '%s'", csvReportName)
 	}
 
-	reportIDRaw, ok := matchedReport["id"]
-	if !ok {
-		return nil, fmt.Errorf("no 'id' field found on report with name '%s'", csvReportName)
-	}
-	reportID, ok := reportIDRaw.(int)
-	if !ok {
-		return nil, fmt.Errorf("invalid 'id' field found on report with name '%s'", csvReportName)
-	}
-
 	// Now, submit the request to generate the report
-	// (lock here because I suspect the auth token or session cookie
-	// is key to "isReportReady" working)
-	reportFileName := ""
-	{
-		s.Lock()
-		defer s.Unlock()
-		err = s.submitReport(matchedReport)
-		if err != nil {
-			return nil, err
-		}
-
-		// Keep polling the API until the report is ready,
-		// and obtain the path from the response that indicates success
-		timeout := time.After(pollTimeout)
-		timeoutHumanDuration := durafmt.Parse(pollTimeout).LimitFirstN(2).String()
-		for {
-			select {
-			case <-timeout:
-				return nil, fmt.Errorf("report polling for report with name '%s' timed out after %s",
-					csvReportName, timeoutHumanDuration)
-			case <-time.After(pollPeriod):
-				reportFile, err := s.isReportReady(reportID, csvReportName)
-				if err != nil {
-					return nil, err
-				}
-
-				// See if the report is ready
-				if reportFile != nil {
-					reportFileName = *reportFile
-					break
-				}
-			}
-		}
-	}
+	reportFileName, err := s.submitAndWait(matchedReport, reportType, pollPeriod, pollTimeout)
 
 	// Download the report
 	reportContents, err := s.downloadReport(reportFileName)
@@ -172,6 +130,7 @@ func (s *Scraper) GetInventoryCSV(csvReportName string, pollPeriod time.Duration
 
 	// Parse the CSV records
 	csvReader := csv.NewReader(strings.NewReader(reportContents))
+	csvReader.LazyQuotes = true
 	records, err := csvReader.ReadAll()
 	if err != nil {
 		return nil, err
@@ -180,23 +139,85 @@ func (s *Scraper) GetInventoryCSV(csvReportName string, pollPeriod time.Duration
 	return records, nil
 }
 
+// Submits a report generation request and polls until it is done,
+// returning the filename to the resultant report when done
+func (s *Scraper) submitAndWait(report map[string]interface{}, reportType string,
+	pollPeriod time.Duration, pollTimeout time.Duration) (string, error) {
+
+	s.Lock()
+	defer s.Unlock()
+
+	reportNameRaw, ok := report["name"]
+	if !ok {
+		return "", errors.New("no 'name' field found on report")
+	}
+	reportName, ok := reportNameRaw.(string)
+	if !ok {
+		return "", errors.New("invalid 'name' field found on report")
+	}
+
+	reportIDRaw, ok := report["id"]
+	if !ok {
+		return "", fmt.Errorf("no 'id' field found on report with name '%s'", reportName)
+	}
+	reportIDFloat, ok := reportIDRaw.(float64)
+	if !ok {
+		return "", fmt.Errorf("invalid 'id' field found on report with name '%s'", reportName)
+	}
+	reportID := int(reportIDFloat)
+
+	err := s.submitReport(report, reportType)
+	if err != nil {
+		return "", err
+	}
+
+	// Keep polling the API until the report is ready,
+	// and obtain the path from the response that indicates success
+	timeout := time.After(pollTimeout)
+	timeoutHumanDuration := durafmt.Parse(pollTimeout).LimitFirstN(2).String()
+	for {
+		select {
+		case <-timeout:
+			return "", fmt.Errorf("report polling for report with name '%s' timed out after %s",
+				reportName, timeoutHumanDuration)
+		case <-time.After(pollPeriod):
+			reportFile, err := s.isReportReady(reportID, reportName)
+			if err != nil {
+				return "", err
+			}
+
+			if reportFile == nil {
+				// Poll again after delay
+				continue
+			}
+
+			return *reportFile, nil
+		}
+	}
+}
+
 // downloadReport downloads a report file from the Transact API
 func (s *Scraper) downloadReport(reportName string) (string, error) {
 	s.Lock()
 	defer s.Unlock()
 
+	// Construct the report URL by escaping each path segment,
+	// but not the slashes between them
 	filename := "QuadPoint POS/" + reportName
-	encoded := url.QueryEscape(filename)
-	url := s.baseURL + "/BinaryDataService.svc/HistoryReport/" + encoded + "?jwthidden=" + s.authToken
+	segments := strings.Split(filename, "/")
+	escapedSegments := []string{}
+	for _, segment := range segments {
+		escapedSegments = append(escapedSegments, url.PathEscape(segment))
+	}
+	escapedFilename := strings.Join(escapedSegments, "/")
+	url := s.baseURL + "/BinaryDataService.svc/HistoryReport/" + escapedFilename + "/CSV"
+	url = url + "?jwthidden=" + s.authToken
 	method := "GET"
 
 	req, err := http.NewRequest(method, url, nil)
 	if err != nil {
 		return "", err
 	}
-
-	req.Header.Add("Accept", "application/json")
-	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", s.authToken))
 
 	res, err := s.client.Do(req)
 	if err != nil {
@@ -247,6 +268,7 @@ func (s *Scraper) isReportReady(reportID int, reportName string) (*string, error
 
 	req.Header.Add("Accept", "application/json")
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", s.authToken))
+	req.Header.Add("Content-Type", "application/json")
 
 	res, err := s.client.Do(req)
 	if err != nil {
@@ -278,7 +300,7 @@ func (s *Scraper) isReportReady(reportID int, reportName string) (*string, error
 }
 
 type favoriteReportsResponse struct {
-	Result favoriteReportsResult `json:"GetFavoriteReportsMainResult"`
+	Result favoriteReportsResult `json:"GetFavoritesResult"`
 }
 
 type favoriteReportsResult struct {
@@ -334,7 +356,9 @@ type submitReportOriginalEntity struct {
 // submitReport sends the given report definition to the API
 // and requests it be generated.
 // Note: s.Mutex should be locked before calling this function
-func (s *Scraper) submitReport(reportDefinition map[string]interface{}) error {
+func (s *Scraper) submitReport(reportDefinition map[string]interface{},
+	reportType string) error {
+
 	reportName := "unknown"
 	if name, ok := reportDefinition["name"]; ok {
 		if nameStr, ok := name.(string); ok {
@@ -342,18 +366,8 @@ func (s *Scraper) submitReport(reportDefinition map[string]interface{}) error {
 		}
 	}
 
-	// Extract the entity type
-	entityType, ok := reportDefinition["__type"]
-	if !ok {
-		return fmt.Errorf("report definition for report '%s' does not contain '__type' definition",
-			reportName)
-	}
-	entityTypeStr, ok := entityType.(string)
-	if !ok {
-		return fmt.Errorf("report definition for report '%s' had invalid entity type")
-	}
-
 	// Create the submit report body JSON
+	reportDefinition["__type"] = reportType
 	body := submitReportBody{
 		// These values come from observing the requests in devtools
 		ChangeSet: []submitReportChange{{
@@ -361,7 +375,7 @@ func (s *Scraper) submitReport(reportDefinition map[string]interface{}) error {
 			Operation: 3,
 			Entity:    reportDefinition,
 			OriginalEntity: submitReportOriginalEntity{
-				Type: entityTypeStr,
+				Type: reportType,
 			},
 		}},
 	}
@@ -380,6 +394,7 @@ func (s *Scraper) submitReport(reportDefinition map[string]interface{}) error {
 
 	req.Header.Add("Accept", "application/json")
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", s.authToken))
+	req.Header.Add("Content-Type", "application/json")
 
 	res, err := s.client.Do(req)
 	if err != nil {

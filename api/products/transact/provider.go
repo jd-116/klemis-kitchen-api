@@ -32,6 +32,7 @@ type Provider struct {
 	csvReportNameColumnOffset     int
 	csvReportQuantityColumnOffset int
 	profitCenterPrefix            string
+	reportType                    string
 
 	*Scraper
 	*products.Cache
@@ -106,6 +107,11 @@ func NewProvider() (*Provider, error) {
 		return nil, err
 	}
 
+	reportType, err := env.GetEnv("Transact CSV report __type value", "TRANSACT_CSV_REPORT_TYPE")
+	if err != nil {
+		return nil, err
+	}
+
 	// Create the scraper
 	scraper, err := NewScraper(baseURL, tenant, username, password)
 	if err != nil {
@@ -125,6 +131,7 @@ func NewProvider() (*Provider, error) {
 		csvReportNameColumnOffset:     csvReportNameColumnOffset,
 		csvReportQuantityColumnOffset: csvReportQuantityColumnOffset,
 		profitCenterPrefix:            profitCenterPrefix,
+		reportType:                    reportType,
 
 		Scraper: scraper,
 		Cache:   &products.Cache{},
@@ -167,7 +174,7 @@ func (p *Provider) periodFetch() {
 func (p *Provider) tryFetch(delayUntilNext string) {
 	// Fetch a list of partial products from the Transact API via a report
 	reportRows, err := p.Scraper.GetInventoryCSV(p.csvReportName,
-		p.reportPollPeriod, p.reportPollTimeout)
+		p.reportPollPeriod, p.reportPollTimeout, p.reportType)
 	if err != nil {
 		// Report error,
 		// but continue the goroutine
