@@ -29,6 +29,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 More details about the API routes can be found at the wiki page: [API Design](https://github.com/jd-116/klemis-kitchen-api/wiki/API-Design).
 
+#### Known Issues
+
+-   The current Docker-based hosting pattern occasionally sees transient connection issues in our staging environment that we're unsure of the cause. This may be related to the networking setup of the staging environment.
+
 ---
 
 ## 🚀 Running (Install Guide)
