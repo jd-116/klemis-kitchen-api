@@ -65,7 +65,7 @@ docker run -d \
     klemis-kitchen-api:latest
 ```
 
-which will start the API server in the background, listening for and responding to HTTP traffic at `API_SERVER_PORT` (configured in `.env`). Note that both the mobile app and admin dashboard are packaged and pre-configured to attempt to connect to the API at `https://backend.klemis-kitchen.com`, so DNS will need to be configured to point to the host server.
+which will start the API server in the background, listening for and responding to HTTP traffic at `SERVER_PORT` (configured in `.env`). Note that both the mobile app and admin dashboard are packaged and pre-configured to attempt to connect to the API at `https://backend.klemis-kitchen.com`, so DNS will need to be configured to point to the host server.
 
 More details about the API routes that the server provides can be found at the wiki page: [API Design](https://github.com/jd-116/klemis-kitchen-api/wiki/API-Design).
 
@@ -149,11 +149,10 @@ A: The way HTTPS is set up doesn't matter for the application; all that matters 
 #### API host parameters
 
 ```
-API_SERVER_PORT=
 API_SERVER_DOMAIN=
 ```
 
-Provide the server domain and port the API exposes for the application to communicate with
+Provide the server domain the API exposes for the application to communicate with
 
 #### Authentication parameters
 
