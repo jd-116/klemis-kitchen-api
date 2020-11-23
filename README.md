@@ -7,7 +7,33 @@
 
 ## ℹ️ Release Notes
 
+**Current version**: v0.1.0
+
+### Changelog
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
+
+#### v0.1.0 - Initial Release (2020-11-22)
+
+#### Added
+
+-   Basic health check endpoint from `/v1/health` that always returns a `204 no content route`
+-   [Working authentication API routes](https://github.com/jd-116/klemis-kitchen-api/wiki/API-Design#locations) that integrate with the Georgia Tech Single Sign-On service using the CAS protocol
+-   [API for creating, deleting, updating, and viewing announcements](https://github.com/jd-116/klemis-kitchen-api/wiki/API-Design#locations) that are displayed in the Klemis Kitchen mobile app
+-   [API for creating, deleting, updating, and viewing location metadata](https://github.com/jd-116/klemis-kitchen-api/wiki/API-Design#locations) that is used to create pins on the interactive map
+-   [API for uploading images to Amazon S3](https://github.com/jd-116/klemis-kitchen-api/wiki/API-Design#locations) to be used for product thumbnails and nutritional information
+-   [API for creating, deleting, updating, and viewing memberships](https://github.com/jd-116/klemis-kitchen-api/wiki/API-Design#locations) to the Klemis Kitchen, including whether they have access to the admin dashboard or not
+-   [API for creating, deleting, updating, and viewing products](https://github.com/jd-116/klemis-kitchen-api/wiki/API-Design#locations) that are stocked at Klemis Kitchen locations, including fuzzy search functionality
+-   (internal) Scraping logic that maintains an active session with the Transact Campus website and uses it to periodically fetch products from the existing point-of-sale system that Klemis Kitchen uses to manage inventory and "sales"
+-   (internal) Logic to maintain an active session with a MongoDB database to persistently store all data that doesn't reside in the Transact Campus system or on Amazon S3
+
+More details about the API routes can be found at the wiki page: [API Design](https://github.com/jd-116/klemis-kitchen-api/wiki/API-Design).
+
+---
+
 ## 🚀 Running (Install Guide)
+
+> Note that this guide is intended for an audience with a moderate level of technical literacy, especially when it comes to using Linux from a terminal and administering a server.
 
 ### Prerequisites
 
@@ -35,13 +61,15 @@ docker run -d \
 
 which will start the API server in the background, listening for and responding to HTTP traffic at `API_SERVER_PORT` (configured in `.env`). Note that both the mobile app and admin dashboard are packaged and pre-configured to attempt to connect to the API at `https://backend.klemis-kitchen.com`, so DNS will need to be configured to point to the host server.
 
+More details about the API routes that the server provides can be found at the wiki page: [API Design](https://github.com/jd-116/klemis-kitchen-api/wiki/API-Design).
+
 ### Securing with HTTPS
 
 While the information served by the Klemis Kitchen API isn't necessarily sensitive, it is considered good practice to serve traffic using HTTPS. Additionally, because of the way CAS (the protocol used to connect to the Georgia Tech Single Sign-On service) works **authentication may not work correctly if the API isn't behind HTTPS**.
 
 To fix this, some external load balancer or server needs to sit in front of the API server and perform **SSL termination** since the API server itself is unable to serve HTTPS traffic.
 
-A Docker-based solution is available by using [`nginx-proxy`](https://github.com/nginx-proxy/nginx-proxy), which contains a Docker container that performs SSL termination in addition to automatically provisioning valid SSL certificates using Lets Encrypt. The commands to run it and the API server as a handful of Docker containers are as follows (note the additional parameters on the API server container; these are needed):
+A Docker-based solution is available by using [`nginx-proxy`](https://github.com/nginx-proxy/nginx-proxy), which contains a Docker container that performs SSL termination in addition to automatically provisioning valid SSL certificates using LetsEncrypt. The commands to run it and the API server as a handful of Docker containers are as follows (note the additional parameters on the API server container; these are needed):
 
 ```sh
 docker run --detach \
@@ -92,21 +120,23 @@ docker run -d \
 
 ### FAQ
 
-Q: What type of machine does this run on?<br>
+**Q: What type of machine does this run on?<br>**
 A: The API runs on a Linux machine
 
-Q: What prerequisites need to be installed?<br>
+**Q: What prerequisites need to be installed?<br>**
 A: Docker needs to be installed
 
-Q: How does the API work?<br>
-A: The API, written in Golang, scrapes data from Klemis kitchen's PoS system through Transact (the online dashboard). Data is stored in MongoDB and S3 (more resource intensive ) Look at our Detailed Design Document for more information.
+**Q: How does the API work?<br>**
+A: The API, written in Golang, scrapes data from Klemis kitchen's PoS system through Transact (the online dashboard). Data is stored in MongoDB and S3 (more resource intensive data). Look at our Detailed Design Document for more information.
 
-Q: What values need to go in the .env file?<br>
+**Q: What values need to go in the .env file?<br>**
 A: Read the configuration section for more information on environment variables
 
-Q: Why does the server need HTTPS?<br>
+**Q: Why does the server need HTTPS?<br>**
+A: The Georgia Tech Single Sign-On service requires third-party applications to use HTTPS when releasing information about users, such as their first/last name and GT username. Because this is used in the authentication pathway, the server needs to be accessible via HTTPS.
 
-Q: How do I set up HTTPS?<br>
+**Q: How do I set up HTTPS?<br>**
+A: The way HTTPS is set up doesn't matter for the application; all that matters is that it exists and can be used by clients. The guide above provides a method that uses Docker for convenience, but any method that serves HTTPS connections with a valid SSL/TLS certificate can work. For example, [this guide](https://www.nginx.com/blog/using-free-ssltls-certificates-from-lets-encrypt-with-nginx/) goes over the process of using LetsEncrypt certificates with Nginx on bare metal.
 
 ## ⚙ Configuration
 
