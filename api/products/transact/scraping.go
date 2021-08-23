@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -105,6 +106,7 @@ func (s *Scraper) GetInventoryCSV(csvReportName string, pollPeriod time.Duration
 	if err != nil {
 		return nil, err
 	}
+	logFavoriteReportNames(allFavoriteReports)
 
 	// Try to find a matching report
 	var matchedReport map[string]interface{} = nil
@@ -137,6 +139,26 @@ func (s *Scraper) GetInventoryCSV(csvReportName string, pollPeriod time.Duration
 	}
 
 	return records, nil
+}
+
+// Short utility function to log all favorite reports' names that were scraped
+func logFavoriteReportNames(allFavoriteReports []map[string]interface{}) {
+	// Log all favorite reports' names
+	allReports := []string{}
+	for _, favoriteReport := range allFavoriteReports {
+		if name, ok := favoriteReport["name"]; ok {
+			if asStr, ok := name.(string); ok {
+				allReports = append(allReports, asStr)
+			}
+		}
+	}
+	allReportsJson, err := json.Marshal(allReports)
+	if err != nil {
+		log.Printf("could not dump favorite reports scraped from Transact: %v\n", err)
+		log.Printf("non-JSON dump: %#v", allReports)
+	} else {
+		log.Printf("favorite reports scraped from Transact: %s\n", allReportsJson)
+	}
 }
 
 // Submits a report generation request and polls until it is done,
@@ -524,8 +546,14 @@ func (s *Scraper) getAuthenticationToken() (string, error) {
 		authValue := authorization[0]
 		if strings.HasPrefix(authValue, "Bearer ") {
 			// Extract the auth token from the header value
-			version := strings.TrimPrefix(authValue, "Bearer ")
-			return version, nil
+			token := strings.TrimPrefix(authValue, "Bearer ")
+
+			// Check to see if the token is valid
+			if token == "expired" {
+				return "", errors.New("authorization token returned was expired; are account credentials correct?")
+			}
+
+			return token, nil
 		}
 
 		return "", fmt.Errorf("malformed authorization token '%s'; expecting 'Bearer X'", authValue)
