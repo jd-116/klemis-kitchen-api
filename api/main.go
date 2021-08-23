@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
 	"os"
 	"os/signal"
@@ -9,11 +10,24 @@ import (
 	"time"
 
 	"github.com/jd-116/klemis-kitchen-api/env"
+	"github.com/joho/godotenv"
 )
 
 // Starts the main API and waits for termination signals.
 // This function blocks.
 func main() {
+	// Load the .env file if it is specified
+	envPath := flag.String("env", "", "path to .env file")
+	flag.Parse()
+	if envPath != nil && *envPath != "" {
+		err := godotenv.Load(*envPath)
+		if err != nil {
+			log.Fatal("error loading .env file")
+		} else {
+			log.Printf("loaded environment variables from %s file\n", *envPath)
+		}
+	}
+
 	apiPort, err := env.GetIntEnv("server port", "SERVER_PORT")
 	if err != nil {
 		log.Fatal(err)

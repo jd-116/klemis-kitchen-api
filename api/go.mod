@@ -12,6 +12,7 @@ require (
 	github.com/go-chi/jwtauth v4.0.4+incompatible
 	github.com/go-chi/render v1.0.1
 	github.com/hako/durafmt v0.0.0-20200710122514-c0fb7b4da026
+	github.com/joho/godotenv v1.3.0 // indirect
 	github.com/lithammer/fuzzysearch v1.1.1
 	github.com/segmentio/ksuid v1.0.3
 	go.mongodb.org/mongo-driver v1.4.0
