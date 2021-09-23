@@ -174,6 +174,10 @@ func (p *Provider) periodFetch() {
 // Attempts to fetch and reload the cache,
 // printing out an error if it occurs
 func (p *Provider) tryFetch(delayUntilNext string) {
+	p.logger.
+		Info().
+		Msg("started to fetch Transact API partial product cache")
+
 	// Fetch a list of partial products from the Transact API via a report
 	reportRows, err := p.Scraper.GetInventoryCSV(p.csvReportName,
 		p.reportPollPeriod, p.reportPollTimeout, p.reportType)
@@ -227,7 +231,7 @@ func (p *Provider) parseCSVRow(row []string) *parseResult {
 	// Scan each cell until it sees the profit center prefix
 	for i, cell := range row {
 		if strings.HasPrefix(cell, p.profitCenterPrefix) {
-			locName := strings.TrimPrefix(cell, p.profitCenterPrefix)
+			locName := strings.TrimSpace(strings.TrimPrefix(cell, p.profitCenterPrefix))
 
 			// Ensure array accesses are within bounds
 			if i+p.csvReportNameColumnOffset >= len(row) ||

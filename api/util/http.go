@@ -76,6 +76,7 @@ func ErrorWithCode(r *http.Request, w http.ResponseWriter, originalError error, 
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	w.Write(jsonResponse)
 }

@@ -5,10 +5,12 @@ import (
 	"encoding/base64"
 	"errors"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/go-chi/jwtauth"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/hlog"
 
 	"github.com/jd-116/klemis-kitchen-api/env"
@@ -18,9 +20,11 @@ import (
 
 // JWTManager contains the secret loaded from the environment
 type JWTManager struct {
-	signer jwt.SigningMethod
-	parser *jwt.Parser
-	secret []byte
+	signer     jwt.SigningMethod
+	parser     *jwt.Parser
+	secret     []byte
+	bypassAuth bool
+	logger     zerolog.Logger
 }
 
 // Claims contains the data used to store a JWT's associated session info
@@ -76,10 +80,17 @@ func (c *Claims) Valid() error {
 
 // NewJWTManager creates a new JWTManager
 // and loads the secret from the environment
-func NewJWTManager() (*JWTManager, error) {
+func NewJWTManager(logger zerolog.Logger) (*JWTManager, error) {
 	jwtSecretStr, err := env.GetEnv("auth JWT secret key", "AUTH_JWT_SECRET")
 	if err != nil {
 		return nil, err
+	}
+
+	bypassAuth := false
+	bypassAuthRaw := os.Getenv("AUTH_BYPASS")
+	if bypassAuthRaw == "1" {
+		bypassAuth = true
+		logger.Warn().Msg("authentication is disabled. do not run this in production!")
 	}
 
 	// Parse the string into bytes
@@ -90,9 +101,10 @@ func NewJWTManager() (*JWTManager, error) {
 	}
 
 	return &JWTManager{
-		signer: jwt.GetSigningMethod("HS256"),
-		parser: &jwt.Parser{},
-		secret: secretBytes,
+		signer:     jwt.GetSigningMethod("HS256"),
+		parser:     &jwt.Parser{},
+		secret:     secretBytes,
+		bypassAuth: bypassAuth,
 	}, nil
 }
 
@@ -124,6 +136,17 @@ const BypassAuthContextKey key = iota
 func (m *JWTManager) Authenticated() func(http.Handler) http.Handler {
 	// Seek, verify and validate JWT tokens
 	verifier := m.verifier()
+
+	// Bypass authentication if configured
+	if m.bypassAuth {
+		return func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				newCtx := context.WithValue(r.Context(), BypassAuthContextKey, true)
+				next.ServeHTTP(w, r.WithContext(newCtx))
+			})
+		}
+	}
+
 	return func(next http.Handler) http.Handler {
 		// Compose the verifier and authenticator functions
 		return verifier(authenticator(next))
@@ -134,10 +157,16 @@ func (m *JWTManager) Authenticated() func(http.Handler) http.Handler {
 // and is authorized (has sufficient permissions) to access admin resources
 func AdminAuthenticated(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if value, ok := r.Context().Value(BypassAuthContextKey).(bool); ok && value == true {
+			// Skip authentication
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		_, claims, err := FromContext(r.Context())
 		if err != nil {
 			hlog.FromRequest(r).
-				Info().
+				Warn().
 				Err(err).
 				Msg("error when getting claims from context")
 
@@ -148,7 +177,7 @@ func AdminAuthenticated(next http.Handler) http.Handler {
 		// Make sure the user has admin access
 		if !claims.Permissions.AdminAccess {
 			hlog.FromRequest(r).
-				Info().
+				Warn().
 				Err(err).
 				Msg("user lacks admin access")
 
@@ -185,7 +214,7 @@ func authenticator(next http.Handler) http.Handler {
 
 		if err != nil {
 			hlog.FromRequest(r).
-				Info().
+				Warn().
 				Err(err).
 				Msg("error when getting token from context")
 
@@ -195,7 +224,7 @@ func authenticator(next http.Handler) http.Handler {
 
 		if token == nil || !token.Valid {
 			hlog.FromRequest(r).
-				Info().
+				Warn().
 				Err(err).
 				Msg("token is nil or invalid")
 

@@ -61,7 +61,7 @@ func NewAPIServer(logger zerolog.Logger) (*APIServer, error) {
 	}
 
 	// Initialize the JWT manager
-	jwtManager, err := auth.NewJWTManager()
+	jwtManager, err := auth.NewJWTManager(logger)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not initialize JWT manager")
 	}
