@@ -1,5 +1,5 @@
 variable "port" {
-  type = string
+  type    = string
   default = "5000"
 }
 
@@ -143,12 +143,20 @@ variable "upload_s3_bucket" {
   type = string
 }
 
+variable "environment_name" {
+  type = string
+}
+
+variable "application_name" {
+  type = string
+}
+
 resource "aws_elastic_beanstalk_application" "application" {
-  name = "klemis-kitchen-api-test-v3"
+  name = var.application_name
 }
 
 resource "aws_elastic_beanstalk_environment" "environment" {
-  name                = "klemiskitchenapitestv3-env"
+  name                = var.environment_name
   application         = aws_elastic_beanstalk_application.application.name
   solution_stack_name = "64bit Amazon Linux 2 v3.4.0 running Go 1"
 
@@ -161,7 +169,13 @@ resource "aws_elastic_beanstalk_environment" "environment" {
   setting {
     namespace = "aws:autoscaling:launchconfiguration"
     name      = "InstanceType"
-    value     = ["t3a.nano", "t3.nano"]
+    value     = "t3a.nano"
+  }
+
+  setting {
+    namespace = "aws:elasticbeanstalk:environment"
+    name      = "EnvironmentType"
+    value     = "SingleInstance"
   }
 
   setting {

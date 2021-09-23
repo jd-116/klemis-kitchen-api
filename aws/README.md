@@ -47,7 +47,7 @@ This should create a file called `aws-bundle.zip` in the root of the repository.
 
 ### 5. Deploying the code bundle
 
-In the [AWS Web Console](https://console.aws.amazon.com/elasticbeanstalk/home), select the appropriate region (should be `us-east-1`) and then navigate to the environment's "Application versions" page.
+In the [AWS Web Console](https://console.aws.amazon.com/elasticbeanstalk/home), select the appropriate region (should be `us-east-1`) and then navigate to the environment's page.
 
-Then, in the top right, click "Upload" and select the ZIP archive that was just made. Use some descriptive name for the Version label, and then confirm. Finally, select the checkbox in the versions table next to the version row you just made, and click "Actions > Deploy" in the top right. Confirm the dialog to start the deployment.
+Then, in the top middle, click "Upload and deploy" and select the ZIP archive that was just made. Use some descriptive name for the Version label, and then confirm the dialog to start the deployment.
 
