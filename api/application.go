@@ -47,9 +47,9 @@ func main() {
 		}
 	}
 
-	apiPort, err := env.GetIntEnv("server port", "SERVER_PORT")
+	apiPort, err := env.GetIntEnv("server port", "PORT")
 	if err != nil {
-		logger.Fatal().Err(err).Msg("could not load SERVER_PORT from env")
+		logger.Fatal().Err(err).Msg("could not load PORT from env")
 	}
 
 	serverCtx, cancel := context.WithCancel(context.Background())

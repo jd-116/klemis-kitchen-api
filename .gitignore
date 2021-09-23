@@ -6,3 +6,6 @@ api/klemis-kitchen-api
 
 # Ignore temp files
 out
+
+# Ignore generated bundles
+aws-bundle.zip
