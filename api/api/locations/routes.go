@@ -45,7 +45,7 @@ func GetAll(locationProvider db.LocationProvider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		locations, err := locationProvider.GetAllLocations(r.Context())
 		if err != nil {
-			util.Error(w, err)
+			util.Error(r, w, err)
 			return
 		}
 
@@ -90,14 +90,14 @@ func GetSingle(locationProvider db.LocationProvider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		if id == "" {
-			util.ErrorWithCode(w, errors.New("the URL parameter is empty"),
+			util.ErrorWithCode(r, w, errors.New("the URL parameter is empty"),
 				http.StatusBadRequest)
 			return
 		}
 
 		location, err := locationProvider.GetLocation(r.Context(), id)
 		if err != nil {
-			util.Error(w, err)
+			util.Error(r, w, err)
 			return
 		}
 
@@ -105,7 +105,7 @@ func GetSingle(locationProvider db.LocationProvider) http.HandlerFunc {
 		// (make sure to return the inner metadata instead of the full struct)
 		jsonResponse, err := json.Marshal(location.Inner())
 		if err != nil {
-			util.ErrorWithCode(w, err, http.StatusInternalServerError)
+			util.ErrorWithCode(r, w, err, http.StatusInternalServerError)
 			return
 		}
 
@@ -123,7 +123,7 @@ func GetProducts(locationProvider db.LocationProvider, productMetadataProvider d
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		if id == "" {
-			util.ErrorWithCode(w, errors.New("the URL parameter is empty"),
+			util.ErrorWithCode(r, w, errors.New("the URL parameter is empty"),
 				http.StatusBadRequest)
 			return
 		}
@@ -134,18 +134,18 @@ func GetProducts(locationProvider db.LocationProvider, productMetadataProvider d
 
 		dbLocation, err := locationProvider.GetLocation(r.Context(), id)
 		if err != nil {
-			util.Error(w, err)
+			util.Error(r, w, err)
 			return
 		}
 
 		partialProducts, err := products.GetAllProducts(dbLocation.TransactIdentifier)
 		if err != nil {
-			util.Error(w, err)
+			util.Error(r, w, err)
 		}
 
 		dbProducts, err := productMetadataProvider.GetAllProducts(r.Context())
 		if err != nil {
-			util.Error(w, err)
+			util.Error(r, w, err)
 		}
 
 		// Create id -> dbProduct map so we can index it quickly
@@ -205,27 +205,27 @@ func GetProduct(locationProvider db.LocationProvider, productMetadataProvider db
 	return func(w http.ResponseWriter, r *http.Request) {
 		locationID := chi.URLParam(r, "id")
 		if locationID == "" {
-			util.ErrorWithCode(w, errors.New("the location URL parameter is empty"),
+			util.ErrorWithCode(r, w, errors.New("the location URL parameter is empty"),
 				http.StatusBadRequest)
 			return
 		}
 
 		productID := chi.URLParam(r, "product_id")
 		if productID == "" {
-			util.ErrorWithCode(w, errors.New("the product URL parameter is empty"),
+			util.ErrorWithCode(r, w, errors.New("the product URL parameter is empty"),
 				http.StatusBadRequest)
 			return
 		}
 
 		dbLocation, err := locationProvider.GetLocation(r.Context(), locationID)
 		if err != nil {
-			util.Error(w, err)
+			util.Error(r, w, err)
 			return
 		}
 
 		partialProduct, err := products.GetProduct(dbLocation.TransactIdentifier, productID)
 		if err != nil {
-			util.Error(w, err)
+			util.Error(r, w, err)
 		}
 
 		// Construct a `LocationProductData` struct
@@ -262,13 +262,13 @@ func Create(locationProvider db.LocationProvider) http.HandlerFunc {
 		var locationCreate types.LocationCreate
 		err := json.NewDecoder(r.Body).Decode(&locationCreate)
 		if err != nil {
-			util.Error(w, err)
+			util.Error(r, w, err)
 			return
 		}
 
 		locationCreate.Name = strings.TrimSpace(locationCreate.Name)
 		if locationCreate.Name == "" {
-			util.ErrorWithCode(w, errors.New("location Name cannot be empty"),
+			util.ErrorWithCode(r, w, errors.New("location Name cannot be empty"),
 				http.StatusBadRequest)
 			return
 		}
@@ -283,7 +283,7 @@ func Create(locationProvider db.LocationProvider) http.HandlerFunc {
 		for {
 			rand, err := ksuid.NewRandom()
 			if err != nil {
-				util.Error(w, err)
+				util.Error(r, w, err)
 				return
 			}
 
@@ -295,14 +295,14 @@ func Create(locationProvider db.LocationProvider) http.HandlerFunc {
 				if _, ok := err.(*db.DuplicateIDError); ok {
 					continue
 				} else {
-					util.Error(w, err)
+					util.Error(r, w, err)
 					return
 				}
 			} else {
 				// Return the single location as the top-level JSON
 				jsonResponse, err := json.Marshal(location)
 				if err != nil {
-					util.ErrorWithCode(w, err, http.StatusInternalServerError)
+					util.ErrorWithCode(r, w, err, http.StatusInternalServerError)
 					return
 				}
 
@@ -320,14 +320,14 @@ func Delete(locationProvider db.LocationProvider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		if id == "" {
-			util.ErrorWithCode(w, errors.New("the URL parameter is empty"),
+			util.ErrorWithCode(r, w, errors.New("the URL parameter is empty"),
 				http.StatusBadRequest)
 			return
 		}
 
 		err := locationProvider.DeleteLocation(r.Context(), id)
 		if err != nil {
-			util.Error(w, err)
+			util.Error(r, w, err)
 			return
 		}
 
@@ -340,7 +340,7 @@ func Update(locationProvider db.LocationProvider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		if id == "" {
-			util.ErrorWithCode(w, errors.New("the URL parameter is empty"),
+			util.ErrorWithCode(r, w, errors.New("the URL parameter is empty"),
 				http.StatusBadRequest)
 			return
 		}
@@ -348,20 +348,20 @@ func Update(locationProvider db.LocationProvider) http.HandlerFunc {
 		partial := make(map[string]interface{})
 		err := json.NewDecoder(r.Body).Decode(&partial)
 		if err != nil {
-			util.Error(w, err)
+			util.Error(r, w, err)
 			return
 		}
 
 		updated, err := locationProvider.UpdateLocation(r.Context(), id, partial)
 		if err != nil {
-			util.Error(w, err)
+			util.Error(r, w, err)
 			return
 		}
 
 		// Return the updated location as the top-level JSON
 		jsonResponse, err := json.Marshal(updated)
 		if err != nil {
-			util.ErrorWithCode(w, err, http.StatusInternalServerError)
+			util.ErrorWithCode(r, w, err, http.StatusInternalServerError)
 			return
 		}
 

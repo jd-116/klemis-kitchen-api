@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/go-chi/chi"
+	"github.com/rs/zerolog/hlog"
 
 	"github.com/jd-116/klemis-kitchen-api/auth"
 	"github.com/jd-116/klemis-kitchen-api/cas"
@@ -26,7 +26,11 @@ import (
 const FlowContinuationCookieName = "FlowContinuation"
 
 // Routes creates a new Chi router with all of the routes for the auth flow
-func Routes(casProvider *cas.Provider, database db.Provider, jwtManager *auth.JWTManager) *chi.Mux {
+func Routes(
+	casProvider *cas.Provider,
+	database db.Provider,
+	jwtManager *auth.JWTManager,
+) *chi.Mux {
 	// Try to get the domain env variable if it is set
 	cookieDomain := strings.TrimSpace(os.Getenv("API_SERVER_DOMAIN"))
 
@@ -105,10 +109,17 @@ func Routes(casProvider *cas.Provider, database db.Provider, jwtManager *auth.JW
 }
 
 // Login handles the GT SSO login flow via the CAS protocol v2
-func Login(casProvider *cas.Provider, flowContinuation *NonceMap,
-	authCodes *NonceMap, cookieDomain string, secureContinuationCookies bool,
-	isRedirectURIValid func(string) bool, membershipProvider db.MembershipProvider,
-	jwtManager *auth.JWTManager, tokenExpirationHours *int64) http.HandlerFunc {
+func Login(
+	casProvider *cas.Provider,
+	flowContinuation *NonceMap,
+	authCodes *NonceMap,
+	cookieDomain string,
+	secureContinuationCookies bool,
+	isRedirectURIValid func(string) bool,
+	membershipProvider db.MembershipProvider,
+	jwtManager *auth.JWTManager,
+	tokenExpirationHours *int64,
+) http.HandlerFunc {
 
 	// Use a closure to inject dependencies
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -123,14 +134,14 @@ func Login(casProvider *cas.Provider, flowContinuation *NonceMap,
 			// Make sure the redirect URI is provided
 			redirectURI := strings.TrimSpace(r.URL.Query().Get("redirect_uri"))
 			if redirectURI == "" {
-				util.ErrorWithCode(w, errors.New("redirect_uri is required"),
+				util.ErrorWithCode(r, w, errors.New("redirect_uri is required"),
 					http.StatusBadRequest)
 				return
 			}
 
 			// Make sure the redirect URI is valid
 			if !isRedirectURIValid(redirectURI) {
-				util.ErrorWithCode(w, errors.New("redirect_uri is not valid"),
+				util.ErrorWithCode(r, w, errors.New("redirect_uri is not valid"),
 					http.StatusBadRequest)
 				return
 			}
@@ -138,7 +149,7 @@ func Login(casProvider *cas.Provider, flowContinuation *NonceMap,
 			// Generate the flow continuation nonce
 			flowContinuationNonce, err := flowContinuation.Provision(redirectURI)
 			if err != nil {
-				util.Error(w, err)
+				util.Error(r, w, err)
 				return
 			}
 
@@ -161,7 +172,7 @@ func Login(casProvider *cas.Provider, flowContinuation *NonceMap,
 			// Get the URL to redirect to GT SSO
 			err = casProvider.Redirect(w, r)
 			if err != nil {
-				util.Error(w, err)
+				util.Error(r, w, err)
 				return
 			}
 		} else {
@@ -169,7 +180,7 @@ func Login(casProvider *cas.Provider, flowContinuation *NonceMap,
 			// by looking for the flow continuation cookie
 			flowContinuationCookie, err := r.Cookie(FlowContinuationCookieName)
 			if err != nil {
-				util.ErrorWithCode(w, errors.New("request doesn't contain flow continuation nonce"),
+				util.ErrorWithCode(r, w, errors.New("request doesn't contain flow continuation nonce"),
 					http.StatusForbidden)
 				return
 			}
@@ -177,13 +188,13 @@ func Login(casProvider *cas.Provider, flowContinuation *NonceMap,
 			// Extract the original redirect URI from the flow continuation nonce
 			redirectURIRaw, ok := flowContinuation.Use(flowContinuationCookie.Value)
 			if !ok {
-				util.ErrorWithCode(w, errors.New("request had unknown flow continuation nonce"),
+				util.ErrorWithCode(r, w, errors.New("request had unknown flow continuation nonce"),
 					http.StatusForbidden)
 				return
 			}
 			redirectURI, ok := redirectURIRaw.(string)
 			if !ok {
-				util.ErrorWithCode(w, errors.New("request had invalid flow continuation nonce value"),
+				util.ErrorWithCode(r, w, errors.New("request had invalid flow continuation nonce value"),
 					http.StatusForbidden)
 				return
 			}
@@ -192,14 +203,18 @@ func Login(casProvider *cas.Provider, flowContinuation *NonceMap,
 			// send a request to the CAS server to validate the ticket
 			identity, err := casProvider.ServiceValidate(r, ticket)
 			if err != nil {
-				util.Error(w, err)
+				util.Error(r, w, err)
 				return
 			}
 
 			username := identity.Username
 			firstName := identity.FirstName
 			lastName := identity.LastName
-			log.Printf("handling authentication for '%s' at the end of CAS flow\n", username)
+
+			hlog.FromRequest(r).
+				Info().
+				Str("user", username).
+				Msg("handling authentication at the end of CAS flow")
 
 			// Determine whether the user is a member or not,
 			// and if so, what level of access they have
@@ -208,7 +223,7 @@ func Login(casProvider *cas.Provider, flowContinuation *NonceMap,
 				// Not a member, redirect to the redirect URI with an error status
 				err = terminalRedirect(w, r, redirectURI, "failure", "1")
 				if err != nil {
-					util.Error(w, err)
+					util.Error(r, w, err)
 				}
 
 				return
@@ -228,7 +243,7 @@ func Login(casProvider *cas.Provider, flowContinuation *NonceMap,
 			// Create the code nonce that can be exchanged for the JWT later
 			authCode, err := authCodes.Provision(token)
 			if err != nil {
-				util.Error(w, err)
+				util.Error(r, w, err)
 				return
 			}
 
@@ -238,7 +253,7 @@ func Login(casProvider *cas.Provider, flowContinuation *NonceMap,
 			// Finally, redirect them to the redirect URI with a code
 			err = terminalRedirect(w, r, redirectURI, "code", authCode)
 			if err != nil {
-				util.Error(w, err)
+				util.Error(r, w, err)
 				return
 			}
 		}
@@ -260,20 +275,20 @@ func TokenExchange(authCodes *NonceMap, jwtManager *auth.JWTManager) func(w http
 		// Read the auth code from the body of the request
 		authCodeBytes, err := ioutil.ReadAll(r.Body)
 		if err != nil {
-			util.Error(w, err)
+			util.Error(r, w, err)
 			return
 		}
 
 		// Look for the auth code in the map
 		rawToken, ok := authCodes.Use(string(authCodeBytes))
 		if !ok {
-			util.ErrorWithCode(w, errors.New("request had unknown auth code"),
+			util.ErrorWithCode(r, w, errors.New("request had unknown auth code"),
 				http.StatusForbidden)
 			return
 		}
 		token, ok := rawToken.(*jwt.Token)
 		if !ok {
-			util.ErrorWithCode(w, errors.New("request had invalid flow continuation nonce value"),
+			util.ErrorWithCode(r, w, errors.New("request had invalid flow continuation nonce value"),
 				http.StatusForbidden)
 			return
 		}
@@ -281,7 +296,7 @@ func TokenExchange(authCodes *NonceMap, jwtManager *auth.JWTManager) func(w http
 		// Sign the JWT and return it to the user
 		signed, err := jwtManager.SignToken(token)
 		if err != nil {
-			util.Error(w, err)
+			util.Error(r, w, err)
 			return
 		}
 
@@ -318,7 +333,7 @@ func Session(jwtManager *auth.JWTManager) func(w http.ResponseWriter, r *http.Re
 		// Extract the claims from the token
 		_, claims, err := auth.FromContext(r.Context())
 		if err != nil {
-			util.ErrorWithCode(w, err, http.StatusUnauthorized)
+			util.ErrorWithCode(r, w, err, http.StatusUnauthorized)
 		}
 
 		// Create the response object and send it to the user

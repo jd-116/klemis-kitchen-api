@@ -3,7 +3,6 @@ package util
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
 
@@ -11,6 +10,7 @@ import (
 	"github.com/jd-116/klemis-kitchen-api/db"
 	"github.com/jd-116/klemis-kitchen-api/products"
 	"github.com/jd-116/klemis-kitchen-api/types"
+	"github.com/rs/zerolog/hlog"
 )
 
 // ResponseCodeFromError resolves a status code from an error
@@ -56,17 +56,20 @@ func ResponseCodeFromError(err error) int {
 }
 
 // Error creates a standardized error response
-func Error(w http.ResponseWriter, originalError error) {
-	ErrorWithCode(w, originalError, ResponseCodeFromError(originalError))
+func Error(r *http.Request, w http.ResponseWriter, originalError error) {
+	ErrorWithCode(r, w, originalError, ResponseCodeFromError(originalError))
 }
 
 // ErrorWithCode creates a standardized error response with a status code
-func ErrorWithCode(w http.ResponseWriter, originalError error, statusCode int) {
+func ErrorWithCode(r *http.Request, w http.ResponseWriter, originalError error, statusCode int) {
 	response := types.ErrorResponse{
 		Message: fmt.Sprint(originalError),
 	}
 
-	log.Printf("error while handling HTTP request: %s\n", originalError)
+	hlog.FromRequest(r).
+		Warn().
+		Err(originalError).
+		Msg("error while handling HTTP request")
 	jsonResponse, err := json.Marshal(response)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

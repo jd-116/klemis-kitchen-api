@@ -46,19 +46,19 @@ func GetAll(productMetadataProvider db.ProductMetadataProvider, locationProvider
 
 		dbLocations, err := locationProvider.GetAllLocations(r.Context())
 		if err != nil {
-			util.Error(w, err)
+			util.Error(r, w, err)
 			return
 		}
 
 		dbProducts, err := productMetadataProvider.GetAllProducts(r.Context())
 		if err != nil {
-			util.Error(w, err)
+			util.Error(r, w, err)
 			return
 		}
 
 		cacheLocations, err := cacheProducts.GetAllLocations()
 		if err != nil {
-			util.Error(w, err)
+			util.Error(r, w, err)
 			return
 		}
 
@@ -80,7 +80,7 @@ func GetAll(productMetadataProvider db.ProductMetadataProvider, locationProvider
 
 			partialProducts, err := cacheProducts.GetAllProducts(cacheLocation)
 			if err != nil {
-				util.Error(w, err)
+				util.Error(r, w, err)
 				return
 			}
 
@@ -157,7 +157,7 @@ func GetSingle(productMetadataProvider db.ProductMetadataProvider, locationProvi
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		if id == "" {
-			util.ErrorWithCode(w, errors.New("the URL parameter is empty"),
+			util.ErrorWithCode(r, w, errors.New("the URL parameter is empty"),
 				http.StatusBadRequest)
 			return
 		}
@@ -170,13 +170,13 @@ func GetSingle(productMetadataProvider db.ProductMetadataProvider, locationProvi
 
 		cacheLocations, err := cacheProducts.GetAllLocations()
 		if err != nil {
-			util.Error(w, err)
+			util.Error(r, w, err)
 			return
 		}
 
 		dbLocations, err := locationProvider.GetAllLocations(r.Context())
 		if err != nil {
-			util.Error(w, err)
+			util.Error(r, w, err)
 			return
 		}
 
@@ -195,7 +195,7 @@ func GetSingle(productMetadataProvider db.ProductMetadataProvider, locationProvi
 			if dbLocation, ok := dbLocationMap[cacheLocation]; ok {
 				singleProduct, err := cacheProducts.GetProduct(cacheLocation, id)
 				if err != nil {
-					util.Error(w, err)
+					util.Error(r, w, err)
 					return
 				}
 
@@ -222,7 +222,7 @@ func GetSingle(productMetadataProvider db.ProductMetadataProvider, locationProvi
 		// Return the single product as the top-level JSON
 		jsonResponse, err := json.Marshal(resultProduct)
 		if err != nil {
-			util.ErrorWithCode(w, err, http.StatusInternalServerError)
+			util.ErrorWithCode(r, w, err, http.StatusInternalServerError)
 			return
 		}
 
@@ -237,7 +237,7 @@ func Update(productMetadataProvider db.ProductMetadataProvider) http.HandlerFunc
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		if id == "" {
-			util.ErrorWithCode(w, errors.New("the URL parameter is empty"),
+			util.ErrorWithCode(r, w, errors.New("the URL parameter is empty"),
 				http.StatusBadRequest)
 			return
 		}
@@ -252,20 +252,20 @@ func Update(productMetadataProvider db.ProductMetadataProvider) http.HandlerFunc
 			partial := make(map[string]interface{})
 			err := json.NewDecoder(r.Body).Decode(&partial)
 			if err != nil {
-				util.Error(w, err)
+				util.Error(r, w, err)
 				return
 			}
 
 			updated, err := productMetadataProvider.UpdateProduct(r.Context(), id, partial)
 			if err != nil {
-				util.Error(w, err)
+				util.Error(r, w, err)
 				return
 			}
 
 			// Return the updated product metadata as the top-level JSON
 			jsonResponse, err := json.Marshal(updated)
 			if err != nil {
-				util.ErrorWithCode(w, err, http.StatusInternalServerError)
+				util.ErrorWithCode(r, w, err, http.StatusInternalServerError)
 				return
 			}
 
@@ -278,27 +278,27 @@ func Update(productMetadataProvider db.ProductMetadataProvider) http.HandlerFunc
 			var productMetadata types.ProductMetadata
 			err := json.NewDecoder(r.Body).Decode(&productMetadata)
 			if err != nil {
-				util.Error(w, err)
+				util.Error(r, w, err)
 				return
 			}
 
 			productMetadata.ID = strings.TrimSpace(id)
 			if productMetadata.ID == "" {
-				util.ErrorWithCode(w, errors.New("productMetadata ID cannot be empty"),
+				util.ErrorWithCode(r, w, errors.New("productMetadata ID cannot be empty"),
 					http.StatusBadRequest)
 				return
 			}
 
 			err = productMetadataProvider.CreateProduct(r.Context(), productMetadata)
 			if err != nil {
-				util.Error(w, err)
+				util.Error(r, w, err)
 				return
 			}
 
 			// Return the updated product metadata as the top-level JSON
 			jsonResponse, err := json.Marshal(productMetadata)
 			if err != nil {
-				util.ErrorWithCode(w, err, http.StatusInternalServerError)
+				util.ErrorWithCode(r, w, err, http.StatusInternalServerError)
 				return
 			}
 

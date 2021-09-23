@@ -39,7 +39,7 @@ func GetAll(announcementProvider db.AnnouncementProvider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		announcements, err := announcementProvider.GetAllAnnouncements(r.Context())
 		if err != nil {
-			util.Error(w, err)
+			util.Error(r, w, err)
 			return
 		}
 
@@ -63,21 +63,21 @@ func GetSingle(announcementProvider db.AnnouncementProvider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		if id == "" {
-			util.ErrorWithCode(w, errors.New("the URL parameter is empty"),
+			util.ErrorWithCode(r, w, errors.New("the URL parameter is empty"),
 				http.StatusBadRequest)
 			return
 		}
 
 		announcement, err := announcementProvider.GetAnnouncement(r.Context(), id)
 		if err != nil {
-			util.Error(w, err)
+			util.Error(r, w, err)
 			return
 		}
 
 		// Return the single announcement as the top-level JSON
 		jsonResponse, err := json.Marshal(announcement)
 		if err != nil {
-			util.ErrorWithCode(w, err, http.StatusInternalServerError)
+			util.ErrorWithCode(r, w, err, http.StatusInternalServerError)
 			return
 		}
 
@@ -94,7 +94,7 @@ func Create(announcementProvider db.AnnouncementProvider) http.HandlerFunc {
 		var announcementCreate types.AnnouncementCreate
 		err := json.NewDecoder(r.Body).Decode(&announcementCreate)
 		if err != nil {
-			util.Error(w, err)
+			util.Error(r, w, err)
 			return
 		}
 
@@ -108,7 +108,7 @@ func Create(announcementProvider db.AnnouncementProvider) http.HandlerFunc {
 		for {
 			rand, err := ksuid.NewRandom()
 			if err != nil {
-				util.Error(w, err)
+				util.Error(r, w, err)
 				return
 			}
 
@@ -120,14 +120,14 @@ func Create(announcementProvider db.AnnouncementProvider) http.HandlerFunc {
 				if _, ok := err.(*db.DuplicateIDError); ok {
 					continue
 				} else {
-					util.Error(w, err)
+					util.Error(r, w, err)
 					return
 				}
 			} else {
 				// Return the single announcement as the top-level JSON
 				jsonResponse, err := json.Marshal(announcement)
 				if err != nil {
-					util.ErrorWithCode(w, err, http.StatusInternalServerError)
+					util.ErrorWithCode(r, w, err, http.StatusInternalServerError)
 					return
 				}
 
@@ -145,14 +145,14 @@ func Delete(announcementProvider db.AnnouncementProvider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		if id == "" {
-			util.ErrorWithCode(w, errors.New("the URL parameter is empty"),
+			util.ErrorWithCode(r, w, errors.New("the URL parameter is empty"),
 				http.StatusBadRequest)
 			return
 		}
 
 		err := announcementProvider.DeleteAnnouncement(r.Context(), id)
 		if err != nil {
-			util.Error(w, err)
+			util.Error(r, w, err)
 			return
 		}
 
@@ -165,7 +165,7 @@ func Update(announcementProvider db.AnnouncementProvider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		if id == "" {
-			util.ErrorWithCode(w, errors.New("the URL parameter is empty"),
+			util.ErrorWithCode(r, w, errors.New("the URL parameter is empty"),
 				http.StatusBadRequest)
 			return
 		}
@@ -173,20 +173,20 @@ func Update(announcementProvider db.AnnouncementProvider) http.HandlerFunc {
 		partial := make(map[string]interface{})
 		err := json.NewDecoder(r.Body).Decode(&partial)
 		if err != nil {
-			util.Error(w, err)
+			util.Error(r, w, err)
 			return
 		}
 
 		updated, err := announcementProvider.UpdateAnnouncement(r.Context(), id, partial)
 		if err != nil {
-			util.Error(w, err)
+			util.Error(r, w, err)
 			return
 		}
 
 		// Return the updated announcement as the top-level JSON
 		jsonResponse, err := json.Marshal(updated)
 		if err != nil {
-			util.ErrorWithCode(w, err, http.StatusInternalServerError)
+			util.ErrorWithCode(r, w, err, http.StatusInternalServerError)
 			return
 		}
 

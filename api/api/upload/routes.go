@@ -71,7 +71,7 @@ func Upload(uploadProvider upload.Provider, validMime func(string) bool) http.Ha
 		// Get the mutlipart part for the file
 		mr, err := r.MultipartReader()
 		if err != nil {
-			util.Error(w, err)
+			util.Error(r, w, err)
 			return
 		}
 		var uploadFile *multipart.Part = nil
@@ -81,7 +81,7 @@ func Upload(uploadProvider upload.Provider, validMime func(string) bool) http.Ha
 				break
 			}
 			if err != nil {
-				util.Error(w, err)
+				util.Error(r, w, err)
 				return
 			}
 
@@ -93,7 +93,7 @@ func Upload(uploadProvider upload.Provider, validMime func(string) bool) http.Ha
 
 		// Ensure a file was passed in
 		if uploadFile == nil {
-			util.ErrorWithCode(w,
+			util.ErrorWithCode(r, w,
 				fmt.Errorf("Expected multipart form submission with '%s' entry", multipartPartKey),
 				http.StatusBadRequest)
 			return
@@ -105,7 +105,7 @@ func Upload(uploadProvider upload.Provider, validMime func(string) bool) http.Ha
 		headerBuffer := make([]byte, 512)
 		_, err = uploadFile.Read(headerBuffer)
 		if err != nil {
-			util.Error(w, err)
+			util.Error(r, w, err)
 			return
 		}
 		headerReader := bytes.NewReader(headerBuffer)
@@ -115,7 +115,7 @@ func Upload(uploadProvider upload.Provider, validMime func(string) bool) http.Ha
 		// content-type by returning "application/octet-stream" if no others seemed to match.
 		contentType := http.DetectContentType(headerBuffer)
 		if contentType == "application/octet-stream" || !validMime(contentType) {
-			util.ErrorWithCode(w,
+			util.ErrorWithCode(r, w,
 				fmt.Errorf("Unsupported file upload MIME type '%s'", contentType),
 				http.StatusBadRequest)
 			return
@@ -124,11 +124,11 @@ func Upload(uploadProvider upload.Provider, validMime func(string) bool) http.Ha
 		// Derive the file extension based on the Mime type
 		fileExtensions, err := mime.ExtensionsByType(contentType)
 		if err != nil {
-			util.ErrorWithCode(w, err, http.StatusBadRequest)
+			util.ErrorWithCode(r, w, err, http.StatusBadRequest)
 			return
 		}
 		if len(fileExtensions) == 0 {
-			util.ErrorWithCode(w,
+			util.ErrorWithCode(r, w,
 				fmt.Errorf("Unsupported file upload MIME type '%s'", contentType),
 				http.StatusBadRequest)
 			return
@@ -138,7 +138,7 @@ func Upload(uploadProvider upload.Provider, validMime func(string) bool) http.Ha
 		// Stream the file into the upload provider
 		fileURL, err := uploadProvider.Upload(r.Context(), fileReader, fileExt, contentType)
 		if err != nil {
-			util.Error(w, err)
+			util.Error(r, w, err)
 			return
 		}
 

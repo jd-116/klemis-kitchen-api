@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
-	"log"
 	"net/http"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/go-chi/jwtauth"
+	"github.com/rs/zerolog/hlog"
 
 	"github.com/jd-116/klemis-kitchen-api/env"
 	"github.com/jd-116/klemis-kitchen-api/types"
@@ -136,15 +136,23 @@ func AdminAuthenticated(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, claims, err := FromContext(r.Context())
 		if err != nil {
-			log.Printf("error when getting claims from context: %s\n", err)
-			unauthorized(w)
+			hlog.FromRequest(r).
+				Info().
+				Err(err).
+				Msg("error when getting claims from context")
+
+			unauthorized(r, w)
 			return
 		}
 
 		// Make sure the user has admin access
 		if !claims.Permissions.AdminAccess {
-			log.Println("user lacks admin access")
-			unauthorized(w)
+			hlog.FromRequest(r).
+				Info().
+				Err(err).
+				Msg("user lacks admin access")
+
+			unauthorized(r, w)
 			return
 		}
 
@@ -176,14 +184,22 @@ func authenticator(next http.Handler) http.Handler {
 		token, _, err := FromContext(r.Context())
 
 		if err != nil {
-			log.Printf("error when getting token from context: %s\n", err)
-			unauthorized(w)
+			hlog.FromRequest(r).
+				Info().
+				Err(err).
+				Msg("error when getting token from context")
+
+			unauthorized(r, w)
 			return
 		}
 
 		if token == nil || !token.Valid {
-			log.Println("token is nil or invalid")
-			unauthorized(w)
+			hlog.FromRequest(r).
+				Info().
+				Err(err).
+				Msg("token is nil or invalid")
+
+			unauthorized(r, w)
 			return
 		}
 
@@ -193,8 +209,8 @@ func authenticator(next http.Handler) http.Handler {
 }
 
 // unauthorized sends a response message in the case that validation fails
-func unauthorized(w http.ResponseWriter) {
-	util.ErrorWithCode(w, errors.New("user is not authorized to access resource"),
+func unauthorized(r *http.Request, w http.ResponseWriter) {
+	util.ErrorWithCode(r, w, errors.New("user is not authorized to access resource"),
 		http.StatusUnauthorized)
 }
 

@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -17,6 +16,7 @@ import (
 
 	"github.com/antchfx/htmlquery"
 	"github.com/hako/durafmt"
+	"github.com/rs/zerolog"
 	"golang.org/x/net/html"
 )
 
@@ -31,10 +31,17 @@ type Scraper struct {
 	password      string
 	authToken     string
 	sync.Mutex
+	logger zerolog.Logger
 }
 
 // NewScraper creates a new instance of the scraper
-func NewScraper(baseURL string, tenant string, username string, password string) (*Scraper, error) {
+func NewScraper(
+	baseURL string,
+	tenant string,
+	username string,
+	password string,
+	logger zerolog.Logger,
+) (*Scraper, error) {
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		return nil, err
@@ -49,6 +56,7 @@ func NewScraper(baseURL string, tenant string, username string, password string)
 		client: &http.Client{
 			Jar: jar,
 		},
+		logger: logger,
 	}, nil
 }
 
@@ -56,6 +64,8 @@ func NewScraper(baseURL string, tenant string, username string, password string)
 func (s *Scraper) ReloadSession() error {
 	s.Lock()
 	defer s.Unlock()
+
+	s.logger.Info().Msg("reloading Transact session")
 
 	// Clear the state
 	s.client.Jar = nil
@@ -92,6 +102,9 @@ func (s *Scraper) ReloadSession() error {
 	// Load the auth token into the scraper
 	s.authToken = authToken
 	s.Ready = true
+
+	s.logger.Info().Msg("successfully reloaded Transact session")
+
 	return nil
 }
 
@@ -106,7 +119,7 @@ func (s *Scraper) GetInventoryCSV(csvReportName string, pollPeriod time.Duration
 	if err != nil {
 		return nil, err
 	}
-	logFavoriteReportNames(allFavoriteReports)
+	s.logFavoriteReportNames(allFavoriteReports)
 
 	// Try to find a matching report
 	var matchedReport map[string]interface{} = nil
@@ -142,7 +155,7 @@ func (s *Scraper) GetInventoryCSV(csvReportName string, pollPeriod time.Duration
 }
 
 // Short utility function to log all favorite reports' names that were scraped
-func logFavoriteReportNames(allFavoriteReports []map[string]interface{}) {
+func (s *Scraper) logFavoriteReportNames(allFavoriteReports []map[string]interface{}) {
 	// Log all favorite reports' names
 	allReports := []string{}
 	for _, favoriteReport := range allFavoriteReports {
@@ -152,13 +165,10 @@ func logFavoriteReportNames(allFavoriteReports []map[string]interface{}) {
 			}
 		}
 	}
-	allReportsJson, err := json.Marshal(allReports)
-	if err != nil {
-		log.Printf("could not dump favorite reports scraped from Transact: %v\n", err)
-		log.Printf("non-JSON dump: %#v", allReports)
-	} else {
-		log.Printf("favorite reports scraped from Transact: %s\n", allReportsJson)
-	}
+	s.logger.
+		Info().
+		Strs("all_reports", allReports).
+		Msg("favorite reports scraped from Transact")
 }
 
 // Submits a report generation request and polls until it is done,
@@ -232,9 +242,16 @@ func (s *Scraper) downloadReport(reportName string) (string, error) {
 		escapedSegments = append(escapedSegments, url.PathEscape(segment))
 	}
 	escapedFilename := strings.Join(escapedSegments, "/")
-	url := s.baseURL + "/BinaryDataService.svc/HistoryReport/" + escapedFilename + "/CSV"
-	url = url + "?jwthidden=" + s.authToken
+	urlWithoutAuth := s.baseURL + "/BinaryDataService.svc/HistoryReport/" + escapedFilename + "/CSV"
+	url := urlWithoutAuth + "?jwthidden=" + s.authToken
 	method := "GET"
+
+	s.logger.
+		Info().
+		Str("url_without_auth", urlWithoutAuth).
+		Str("method", method).
+		Str("report_name", reportName).
+		Msg("downloading report file from Transact")
 
 	req, err := http.NewRequest(method, url, nil)
 	if err != nil {
@@ -253,6 +270,13 @@ func (s *Scraper) downloadReport(reportName string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
+	contents := buf.String()
+	s.logger.
+		Info().
+		Int("file_length", len(contents)).
+		Str("report_name", reportName).
+		Msg("successfully downloaded report file from Transact")
 
 	return buf.String(), nil
 }
@@ -282,6 +306,15 @@ func (s *Scraper) isReportReady(reportID int, reportName string) (*string, error
 
 	url := s.baseURL + "/QPWebOffice-Web-BusinessService.svc/JSON/IsReportReady"
 	method := "POST"
+
+	s.logger.
+		Info().
+		Str("url", url).
+		Str("method", method).
+		Bytes("body", isReportReadyRequestBody).
+		Int("report_id", reportID).
+		Str("report_name", reportName).
+		Msg("polling the Transact API to determine if report is ready")
 
 	req, err := http.NewRequest(method, url, bytes.NewReader(isReportReadyRequestBody))
 	if err != nil {
@@ -314,8 +347,17 @@ func (s *Scraper) isReportReady(reportID int, reportName string) (*string, error
 		return nil, fmt.Errorf("report creation for '%s' failed", reportName)
 	}
 	if result.Result.Ready && result.Result.File != nil {
+		s.logger.
+			Info().
+			Str("report_url", *result.Result.File).
+			Int("report_id", reportID).
+			Str("report_name", reportName).
+			Msg("Transact report was ready")
+
 		return result.Result.File, nil
 	}
+
+	s.logger.Info().Msg("Transact report was not ready")
 
 	// Report isn't ready yet, but no error
 	return nil, nil
@@ -337,6 +379,12 @@ func (s *Scraper) getFavoriteReports() ([]map[string]interface{}, error) {
 	url := s.baseURL + "/QPWebOffice-Web-QuadPointDomain.svc/JSON/GetFavorites"
 	method := "GET"
 
+	s.logger.
+		Info().
+		Str("url", url).
+		Str("method", method).
+		Msg("getting all favorite reports")
+
 	req, err := http.NewRequest(method, url, nil)
 	if err != nil {
 		return nil, err
@@ -356,6 +404,8 @@ func (s *Scraper) getFavoriteReports() ([]map[string]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	s.logger.Info().Msg("successfully got all favorite reports")
 
 	return result.Result.Items, nil
 }
@@ -409,6 +459,14 @@ func (s *Scraper) submitReport(reportDefinition map[string]interface{},
 	url := s.baseURL + "/QPWebOffice-Web-QuadPointDomain.svc/JSON/SubmitChanges"
 	method := "POST"
 
+	s.logger.
+		Info().
+		Str("url", url).
+		Str("method", method).
+		Str("report_name", reportName).
+		Str("report_type", reportType).
+		Msg("requesting report to be generated")
+
 	req, err := http.NewRequest(method, url, bytes.NewReader(submitReportRequestBody))
 	if err != nil {
 		return err
@@ -428,6 +486,10 @@ func (s *Scraper) submitReport(reportDefinition map[string]interface{},
 		return fmt.Errorf("report submission for report '%s' failed", reportName)
 	}
 
+	s.logger.
+		Info().
+		Msg("successfully requested report to be generated")
+
 	// Report submission was successful
 	return nil
 }
@@ -438,6 +500,13 @@ func (s *Scraper) getSessionCookie() error {
 	url := s.baseURL + "/QPWebOffice-Web-AuthenticationService.svc/JSON/LoggedIn"
 	method := "POST"
 	payload := strings.NewReader("{}")
+
+	s.logger.
+		Info().
+		Str("url", url).
+		Str("method", method).
+		Str("body", "{}").
+		Msg("getting new Transact session cookie")
 
 	req, err := http.NewRequest(method, url, payload)
 	if err != nil {
@@ -454,18 +523,29 @@ func (s *Scraper) getSessionCookie() error {
 	defer res.Body.Close()
 
 	// Look for the set-cookie header
-	if _, ok := res.Header["Set-Cookie"]; ok {
-		// Assume good
-		return nil
+	if _, ok := res.Header["Set-Cookie"]; !ok {
+		return errors.New("no cookie header found when attempting to get a session cookie")
 	}
 
-	return errors.New("no cookie header found when attempting to get a session cookie")
+	s.logger.
+		Info().
+		Msg("successfully obtained new Transact session cookie")
+
+	// Assume good
+	return nil
 }
 
 // Attempts to get the client version to use
 func (s *Scraper) getClientVersion() (string, error) {
+
 	url := s.baseURL + "/?tenant=" + s.tenant
 	method := "GET"
+
+	s.logger.
+		Info().
+		Str("url", url).
+		Str("method", method).
+		Msg("getting current Transact client version")
 
 	req, err := http.NewRequest(method, url, nil)
 	if err != nil {
@@ -488,13 +568,20 @@ func (s *Scraper) getClientVersion() (string, error) {
 	text := &bytes.Buffer{}
 	collectText(title, text)
 	titleStr := text.String()
-	if strings.HasPrefix(titleStr, "QuadPoint Cloud ") {
-		// Extract the version from the page title string
-		version := strings.TrimPrefix(titleStr, "QuadPoint Cloud ")
-		return version, nil
+	if !strings.HasPrefix(titleStr, "QuadPoint Cloud ") {
+		return "", fmt.Errorf("malformed page title '%s'; expecting 'QuadPoint Cloud X.X.X.X'", titleStr)
 	}
 
-	return "", fmt.Errorf("malformed page title '%s'; expecting 'QuadPoint Cloud X.X.X.X'", titleStr)
+	// Extract the version from the page title string
+	version := strings.TrimPrefix(titleStr, "QuadPoint Cloud ")
+
+	s.logger.
+		Info().
+		Str("client_version", version).
+		Str("title", titleStr).
+		Msg("successfully obtained current Transact client version")
+
+	return version, nil
 }
 
 // Collects all the inner text for a given HTML node
@@ -512,6 +599,13 @@ func collectText(n *html.Node, buf *bytes.Buffer) {
 func (s *Scraper) getAuthenticationToken() (string, error) {
 	url := s.baseURL + "/QPWebOffice-Web-AuthenticationService.svc/JSON/Authenticate"
 	method := "POST"
+
+	s.logger.
+		Info().
+		Str("url", url).
+		Str("method", method).
+		Msg("attempting to log in and acquire authentication token")
+
 	payloadJSON := map[string]interface{}{
 		"isPersistent":   true,
 		"customData":     "",
@@ -552,6 +646,11 @@ func (s *Scraper) getAuthenticationToken() (string, error) {
 			if token == "expired" {
 				return "", errors.New("authorization token returned was expired; are account credentials correct?")
 			}
+
+			s.logger.
+				Info().
+				Int("token_length", len(token)).
+				Msg("successfully logged in to Transact and obtained authentication token")
 
 			return token, nil
 		}

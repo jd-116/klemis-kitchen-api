@@ -2,12 +2,12 @@ package transact
 
 import (
 	"context"
-	"log"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/hako/durafmt"
+	"github.com/rs/zerolog"
 
 	"github.com/jd-116/klemis-kitchen-api/env"
 	"github.com/jd-116/klemis-kitchen-api/products"
@@ -36,12 +36,13 @@ type Provider struct {
 
 	*Scraper
 	*products.Cache
+	logger zerolog.Logger
 }
 
 // NewProvider loads values from the environment
 // and creates the provider
 // (doesn't involve authentication or start goroutines)
-func NewProvider() (*Provider, error) {
+func NewProvider(logger zerolog.Logger) (*Provider, error) {
 	baseURL, err := env.GetEnv("Transact base URL", "TRANSACT_BASE_URL")
 	if err != nil {
 		return nil, err
@@ -113,7 +114,7 @@ func NewProvider() (*Provider, error) {
 	}
 
 	// Create the scraper
-	scraper, err := NewScraper(baseURL, tenant, username, password)
+	scraper, err := NewScraper(baseURL, tenant, username, password, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -135,6 +136,7 @@ func NewProvider() (*Provider, error) {
 
 		Scraper: scraper,
 		Cache:   &products.Cache{},
+		logger:  logger,
 	}, nil
 }
 
@@ -178,8 +180,10 @@ func (p *Provider) tryFetch(delayUntilNext string) {
 	if err != nil {
 		// Report error,
 		// but continue the goroutine
-		log.Println("an error occurred while fetching Transact API partial product cache:")
-		log.Println(err)
+		p.logger.
+			Error().
+			Err(err).
+			Msg("an error occurred while fetching Transact API partial product cache")
 		return
 	}
 
@@ -203,9 +207,12 @@ func (p *Provider) tryFetch(delayUntilNext string) {
 		totalLoaded++
 	}
 
-	log.Printf("scraped %d -> %d raw items from the Transact API\n", len(reportRows), totalLoaded)
-	log.Printf("reloaded Transact API partial product cache (%d total); fetching again in %s\n",
-		totalLoaded, delayUntilNext)
+	p.logger.
+		Info().
+		Int("raw_row_count", len(reportRows)).
+		Int("imported_row_count", totalLoaded).
+		Str("delay_until_next", delayUntilNext).
+		Msg("reloaded Transact API partial product cache")
 
 	// Load the products into the cache
 	p.Cache.Load(productsMap)
@@ -265,7 +272,10 @@ func (p *Provider) parseCSVRow(row []string) *parseResult {
 // Periodically reloads the session
 func (p *Provider) periodReloadSession() {
 	humanDuration := durafmt.Parse(p.reloadSessionPeriod).LimitFirstN(2).String()
-	log.Printf("reloading Transact API session in %s", humanDuration)
+	p.logger.
+		Info().
+		Str("interval", humanDuration).
+		Msg("started timer to reload Transact API session")
 	for {
 		select {
 		case <-p.stopReloadSession:
@@ -275,11 +285,16 @@ func (p *Provider) periodReloadSession() {
 			if err != nil {
 				// Report error,
 				// but continue the goroutine
-				log.Println("an error occurred while reloading Transact API session:")
-				log.Println(err)
+				p.logger.
+					Error().
+					Err(err).
+					Msg("an error occurred while reloading Transact API session")
 			} else {
-				log.Printf("reloaded Transact API session for version %s; reloading again in %s\n",
-					p.Scraper.ClientVersion, humanDuration)
+				p.logger.
+					Info().
+					Str("transact_version", p.Scraper.ClientVersion).
+					Str("delay_until_next", humanDuration).
+					Msg("reloaded Transact API session")
 			}
 		}
 	}

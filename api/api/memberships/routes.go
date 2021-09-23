@@ -39,7 +39,7 @@ func GetAll(membershipProvider db.MembershipProvider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		memberships, err := membershipProvider.GetAllMemberships(r.Context())
 		if err != nil {
-			util.Error(w, err)
+			util.Error(r, w, err)
 			return
 		}
 
@@ -63,21 +63,21 @@ func GetSingle(membershipProvider db.MembershipProvider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		username := chi.URLParam(r, "username")
 		if username == "" {
-			util.ErrorWithCode(w, errors.New("the URL parameter is empty"),
+			util.ErrorWithCode(r, w, errors.New("the URL parameter is empty"),
 				http.StatusBadRequest)
 			return
 		}
 
 		membership, err := membershipProvider.GetMembership(r.Context(), username)
 		if err != nil {
-			util.Error(w, err)
+			util.Error(r, w, err)
 			return
 		}
 
 		// Return the single membership as the top-level JSON
 		jsonResponse, err := json.Marshal(membership)
 		if err != nil {
-			util.ErrorWithCode(w, err, http.StatusInternalServerError)
+			util.ErrorWithCode(r, w, err, http.StatusInternalServerError)
 			return
 		}
 
@@ -93,27 +93,27 @@ func Create(membershipProvider db.MembershipProvider) http.HandlerFunc {
 		var membership types.Membership
 		err := json.NewDecoder(r.Body).Decode(&membership)
 		if err != nil {
-			util.Error(w, err)
+			util.Error(r, w, err)
 			return
 		}
 
 		membership.Username = strings.TrimSpace(membership.Username)
 		if membership.Username == "" {
-			util.ErrorWithCode(w, errors.New("membership Username cannot be empty"),
+			util.ErrorWithCode(r, w, errors.New("membership Username cannot be empty"),
 				http.StatusBadRequest)
 			return
 		}
 
 		err = membershipProvider.CreateMembership(r.Context(), membership)
 		if err != nil {
-			util.Error(w, err)
+			util.Error(r, w, err)
 			return
 		}
 
 		// Return the single membership as the top-level JSON
 		jsonResponse, err := json.Marshal(membership)
 		if err != nil {
-			util.ErrorWithCode(w, err, http.StatusInternalServerError)
+			util.ErrorWithCode(r, w, err, http.StatusInternalServerError)
 			return
 		}
 
@@ -128,14 +128,14 @@ func Delete(membershipProvider db.MembershipProvider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		username := chi.URLParam(r, "username")
 		if username == "" {
-			util.ErrorWithCode(w, errors.New("the URL parameter is empty"),
+			util.ErrorWithCode(r, w, errors.New("the URL parameter is empty"),
 				http.StatusBadRequest)
 			return
 		}
 
 		err := membershipProvider.DeleteMembership(r.Context(), username)
 		if err != nil {
-			util.Error(w, err)
+			util.Error(r, w, err)
 			return
 		}
 
@@ -148,7 +148,7 @@ func Update(membershipProvider db.MembershipProvider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		username := chi.URLParam(r, "username")
 		if username == "" {
-			util.ErrorWithCode(w, errors.New("the URL parameter is empty"),
+			util.ErrorWithCode(r, w, errors.New("the URL parameter is empty"),
 				http.StatusBadRequest)
 			return
 		}
@@ -156,20 +156,20 @@ func Update(membershipProvider db.MembershipProvider) http.HandlerFunc {
 		partial := make(map[string]interface{})
 		err := json.NewDecoder(r.Body).Decode(&partial)
 		if err != nil {
-			util.Error(w, err)
+			util.Error(r, w, err)
 			return
 		}
 
 		updated, err := membershipProvider.UpdateMembership(r.Context(), username, partial)
 		if err != nil {
-			util.Error(w, err)
+			util.Error(r, w, err)
 			return
 		}
 
 		// Return the updated membership as the top-level JSON
 		jsonResponse, err := json.Marshal(updated)
 		if err != nil {
-			util.ErrorWithCode(w, err, http.StatusInternalServerError)
+			util.ErrorWithCode(r, w, err, http.StatusInternalServerError)
 			return
 		}
 

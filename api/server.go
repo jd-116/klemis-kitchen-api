@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"time"
@@ -12,6 +11,9 @@ import (
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/cors"
 	"github.com/go-chi/render"
+	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/hlog"
 
 	"github.com/jd-116/klemis-kitchen-api/api/announcements"
 	apiAuth "github.com/jd-116/klemis-kitchen-api/api/auth"
@@ -35,69 +37,71 @@ type APIServer struct {
 	casProvider    *cas.Provider
 	jwtManager     *auth.JWTManager
 	uploadProvider *s3.Provider
+	logger         zerolog.Logger
 }
 
 // NewAPIServer initializes the struct and all constituent components
-func NewAPIServer() (*APIServer, error) {
+func NewAPIServer(logger zerolog.Logger) (*APIServer, error) {
 	// Initialize the Transact scraper
-	itemProvider, err := transact.NewProvider()
+	itemProvider, err := transact.NewProvider(logger)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "could not initialize Transact scraper")
 	}
 
 	// Initialize the MongoDB handler
 	dbProvider, err := mongo.NewProvider()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "could not initialize MongoDB handler")
 	}
 
 	// Initialize the CAS provider
 	casProvider, err := cas.NewProvider()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "could not initialize CAS provider")
 	}
 
 	// Initialize the JWT manager
 	jwtManager, err := auth.NewJWTManager()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "could not initialize JWT manager")
 	}
 
 	// Initialize the S3 handler
 	uploadProvider, err := s3.NewProvider()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "could not initialize S3 handler")
 	}
 
 	return &APIServer{
-		itemProvider,
-		dbProvider,
-		casProvider,
-		jwtManager,
-		uploadProvider,
+		itemProvider:   itemProvider,
+		dbProvider:     dbProvider,
+		casProvider:    casProvider,
+		jwtManager:     jwtManager,
+		uploadProvider: uploadProvider,
+		logger:         logger,
 	}, nil
 }
 
 // Connect initializes the struct and all constituent components
 func (a *APIServer) Connect(ctx context.Context) error {
 	// Start the Transact scraper goroutines
-	log.Println("initializing Transact API connector")
+	a.logger.Info().Msg("initializing Transact API connector")
 	err := a.itemProvider.Connect(ctx)
 	if err != nil {
-		log.Println("could not authenticate with the Transact API")
-		return err
+		return errors.Wrap(err, "could not authenticate with the Transact API")
 	}
-	log.Printf("successfully authenticated with the Transact API version %s\n",
-		a.itemProvider.Scraper.ClientVersion)
+	a.logger.
+		Info().
+		Str("transact_version", a.itemProvider.Scraper.ClientVersion).
+		Msg("successfully authenticated with the Transact API")
 
 	// Connect to the MongoDB database
-	log.Println("initializing MongoDB database provider")
+	a.logger.Info().Msg("initializing MongoDB database provider")
 	err = a.dbProvider.Connect(ctx)
 	if err != nil {
-		log.Println("could not disconnect to the database")
-		return err
+		return errors.Wrap(err, "could not disconnect to the database")
 	}
-	log.Println("successfully connected to and pinged the database")
+	a.logger.Info().Msg("successfully connected to and pinged the database")
 
 	return nil
 }
@@ -106,17 +110,15 @@ func (a *APIServer) Connect(ctx context.Context) error {
 func (a *APIServer) Disconnect(ctx context.Context) error {
 	err := a.dbProvider.Disconnect(ctx)
 	if err != nil {
-		log.Println("could not disconnect from the database")
-		return err
+		return errors.Wrap(err, "could not disconnect from the database")
 	}
-	log.Println("disconnected from the database")
+	a.logger.Info().Msg("disconnected from the database")
 
 	err = a.itemProvider.Disconnect(ctx)
 	if err != nil {
-		log.Println("could not disconnect from the Transact API")
-		return err
+		return errors.Wrap(err, "could not disconnect from the Transact API")
 	}
-	log.Println("disconnected from the Transact API")
+	a.logger.Info().Msg("disconnected from the Transact API")
 
 	return nil
 }
@@ -133,13 +135,13 @@ func (a *APIServer) Serve(ctx context.Context, port int) {
 
 	go func() {
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("listen: %s\n", err)
+			a.logger.Fatal().Err(err).Msg("an error occurred when serving the HTTP server")
 		}
 	}()
-	log.Printf("API server started; serving on port %d\n", port)
+	a.logger.Info().Int("port", port).Msg("API server started")
 
 	<-ctx.Done()
-	log.Println("API server stopped")
+	a.logger.Info().Msg("API server stopped")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer func() {
@@ -147,9 +149,9 @@ func (a *APIServer) Serve(ctx context.Context, port int) {
 	}()
 
 	if err := server.Shutdown(ctx); err != nil {
-		log.Fatalf("API server shutdown failed: %+v", err)
+		a.logger.Fatal().Err(err).Msg("API server shutdown failed")
 	}
-	log.Println("API server exited properly")
+	a.logger.Info().Msg("API server exited properly")
 }
 
 func (a *APIServer) routes() *chi.Mux {
@@ -158,13 +160,26 @@ func (a *APIServer) routes() *chi.Mux {
 	// https://itnext.io/how-i-pass-around-shared-resources-databases-configuration-etc-within-golang-projects-b27af4d8e8a
 	router := chi.NewRouter()
 	router.Use(
-		middleware.Recoverer,                          // Recover from panics without crashing the server
-		middleware.Logger,                             // Log API request calls
-		middleware.RedirectSlashes,                    // Redirect slashes to no slash URL versions
-		render.SetContentType(render.ContentTypeJSON), // Set content-type headers to application/json
-		middleware.Compress(5),                        // Compress results, mostly gzipping assets and json
-		middleware.NoCache,                            // Prevent clients from caching the results
-		a.corsMiddleware(),                            // Create cors middleware from go-chi/cors
+		middleware.Recoverer,      // Recover from panics without crashing the server
+		hlog.NewHandler(a.logger), // Attach a logger to each request
+		hlog.AccessHandler(func(r *http.Request, status, size int, duration time.Duration) {
+			// Log API request calls once they complete:
+			hlog.FromRequest(r).Info().
+				Str("method", r.Method).
+				Stringer("url", r.URL).
+				Int("status", status).
+				Int("bytes_out", size).
+				Dur("duration", duration).
+				Str("ip", r.RemoteAddr).
+				Str("user_agent", r.Header.Get("User-Agent")).
+				Msg("handled HTTP request")
+		}),
+		hlog.RequestIDHandler("req_id", "X-Request-Id"), // Attach a unique request ID to each incoming request
+		middleware.RedirectSlashes,                      // Redirect slashes to no slash URL versions
+		render.SetContentType(render.ContentTypeJSON),   // Set content-type headers to application/json
+		middleware.Compress(5),                          // Compress results, mostly gzipping assets and json
+		middleware.NoCache,                              // Prevent clients from caching the results
+		a.corsMiddleware(),                              // Create cors middleware from go-chi/cors
 	)
 
 	// ==============================
