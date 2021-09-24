@@ -29,31 +29,31 @@ type Provider struct {
 
 // NewProvider creates a new provider and loads values in from the environment
 func NewProvider() (*Provider, error) {
-	dbHost, err := env.GetEnv("database host name", "MONGO_DB_HOST")
+	username, err := env.GetEnv("MongoDB username", "MONGO_DB_USERNAME")
 	if err != nil {
 		return nil, err
 	}
 
-	dbPwd, err := env.GetEnv("database password", "MONGO_DB_PWD")
+	password, err := env.GetEnv("MongoDB password", "MONGO_DB_PASSWORD")
 	if err != nil {
 		return nil, err
 	}
 
-	dbCluster, err := env.GetEnv("database cluster name ", "MONGO_DB_CLUSTER")
+	clusterName, err := env.GetEnv("MongoDB cluster name ", "MONGO_DB_CLUSTER_NAME")
 	if err != nil {
 		return nil, err
 	}
 
-	dbName, err := env.GetEnv("database name ", "MONGO_DB_NAME")
+	databaseName, err := env.GetEnv("MongoDB database name ", "MONGO_DB_DATABASE_NAME")
 	if err != nil {
 		return nil, err
 	}
 
 	connectionURI := fmt.Sprintf("mongodb+srv://%s:%s@%s.qkdgq.mongodb.net/%s?retryWrites=true&w=majority",
-		dbHost, dbPwd, dbCluster, dbName)
+		username, password, clusterName, databaseName)
 	return &Provider{
 		connectionURI: connectionURI,
-		databaseName:  dbName,
+		databaseName:  databaseName,
 		client:        nil,
 	}, nil
 }

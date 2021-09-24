@@ -22,12 +22,12 @@ function cleanup {
 trap cleanup EXIT
 
 echo "Using '$WORK_DIR' as a temp working directory"
-cp -r "$DIR/../api/"* "$WORK_DIR"
-cp -r "$DIR/../aws/bundle-include/"* "$WORK_DIR"
+cp -r "$DIR"/../api/. "$WORK_DIR"
+cp -r "$DIR"/../aws/bundle-include/. "$WORK_DIR"
 # Delete the binary file if it existed in the api/ folder
-rm -f "$WORK_DIR/klemis-kitchen-api"
-rm -f "$DIR/../aws-bundle.zip"
+rm -f "$WORK_DIR"/klemis-kitchen-api
+rm -f "$DIR"/../aws-bundle.zip
 pushd "$WORK_DIR"
-zip -r "$DIR/../aws-bundle.zip" .
+zip -r "$DIR"/../aws-bundle.zip .
 popd
 echo "Generated bundle at ./aws-bundle.zip"

@@ -175,13 +175,13 @@ The required authentication credentials for users to utilize the application. Pr
 #### MongoDB connection credentials
 
 ```
-MONGO_DB_HOST=
-MONGO_DB_PWD=
-MONGO_DB_CLUSTER=
-MONGO_DB_NAME=
+MONGO_DB_USERNAME=
+MONGO_DB_PASSWORD=
+MONGO_DB_CLUSTER_NAME=
+MONGO_DB_DATABASE_NAME=
 ```
 
-MongoDB credentials are derived from Mongodb Atlas. The `MONGO_DB_HOST` and `MONGO_DB_PWD` are derived after creating an account with MongoDB Atlas, and `MONGO_DB_CLUSTER` and `MONGO_DB_NAME` are for the cluster on Atlas used to store data.
+MongoDB credentials are derived from Mongodb Atlas. The `MONGO_DB_USERNAME` and `MONGO_DB_PASSWORD` are derived after creating an account with MongoDB Atlas, and `MONGO_DB_CLUSTER_NAME` and `MONGO_DB_DATABASE_NAME` are for the cluster on Atlas used to store data.
 
 #### Transact API connection credentials/parameters
 
