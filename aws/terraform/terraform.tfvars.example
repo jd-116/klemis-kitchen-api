@@ -35,7 +35,7 @@ api_internal_port = 5000
 auth_secure_continuation = true
 # List of prefixes to match authentication redirect URIs against (should include this API).
 # If empty, then all URIs are allowed.
-# If null, then this defaults to only the API subdomain on HTTPS
+# If null, then this defaults to only the Admin subdomain on HTTPS
 auth_redirect_uri_prefixes = null
 # The (base64-encoded) encryption secret used for signing JWTs (should be between 128 and 512 bits)
 auth_jwt_secret = "<REPLACE_ME>"

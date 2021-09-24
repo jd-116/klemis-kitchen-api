@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# TODO remove --staging
 # TODO fix domain name
 # TODO fix email
 sudo certbot \
@@ -7,5 +6,4 @@ sudo certbot \
     -d api.klemis-kitchen.ga \
     --nginx \
     --agree-tos \
-    --email jazevedo620@gmail.com \
-    --staging
+    --email jazevedo620@gmail.com

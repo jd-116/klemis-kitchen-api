@@ -67,7 +67,7 @@ variable "auth_secure_continuation" {
 variable "auth_redirect_uri_prefixes" {
   type        = list(string)
   default     = null
-  description = "List of prefixes to match authentication redirect URIs against (should include this API). If empty, then all URIs are allowed. If null, then this defaults to only the API subdomain on HTTPS"
+  description = "List of prefixes to match authentication redirect URIs against (should include this API). If empty, then all URIs are allowed. If null, then this defaults to only the admin subdomain on HTTPS"
 }
 
 variable "auth_jwt_secret" {

@@ -16,11 +16,11 @@ resource "random_pet" "name_suffix" {
 
 locals {
   # If `var.auth_redirect_uri_prefixes` is `null`,
-  # then this assigns it with the HTTPS API subdomain URL
+  # then this assigns it with the HTTPS admin subdomain URL
   # as the only allowed URI prefix:
   resolved_auth_redirect_uri_prefixes = (
     var.auth_redirect_uri_prefixes == null
-    ? "https://${var.api_subdomain}.${var.root_domain}"
+    ? "https://${var.admin_subdomain}.${var.root_domain}"
     : join("|", var.auth_redirect_uri_prefixes)
   )
   # Collect all defined environment variables into a single map
@@ -139,9 +139,6 @@ data "aws_iam_policy_document" "upload" {
     actions = [
       "s3:GetObject",
       "s3:PutObject",
-      "s3:UploadPart",
-      "s3:CreateMultipartUpload",
-      "s3:CompleteMultipartUpload",
       "s3:AbortMultipartUpload"
     ]
     resources = [aws_s3_bucket.upload.arn, "${aws_s3_bucket.upload.arn}/*"]
