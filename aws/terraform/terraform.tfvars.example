@@ -33,7 +33,7 @@ api_internal_port = 5000
 # =========================
 # Whether the flow continuation cookies used between redirects should be secure (HTTPS-only)
 auth_secure_continuation = true
-# List of prefixes to match authentication redirect URIs against (should include this API).
+# List of prefixes to match authentication redirect URIs against (should include the admin dashboard).
 # If empty, then all URIs are allowed.
 # If null, then this defaults to only the Admin subdomain on HTTPS
 auth_redirect_uri_prefixes = null

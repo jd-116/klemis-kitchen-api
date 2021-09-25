@@ -7,9 +7,17 @@
 
 ## 📃 Release Notes
 
-**Current version**: v0.1.1
+**Current version**: v0.2.0
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
+
+### v0.2.0 - AWS deployment functionality (2020-11-23)
+
+#### Added
+
+-   Support for deploying the application and related infrastructure on AWS. See [./aws](./aws) for more information
+-   `--log-format` CLI parameter to the main binary, which can be either `console` or `json`
+-   (internal) Switched to structured logging based on [zerolog](https://github.com/rs/zerolog)
 
 ### v0.1.1 - Locations Patch (2020-11-23)
 
@@ -65,10 +73,11 @@ Finally, to run the API server, run:
 ```sh
 docker run -d \
     --name klemis-kitchen-api \
-    --env-file ./.env \
+    --mount type=bind,source="$(pwd)"/.env,target=/etc/klemis-kitchen-api.env,readonly \
     --env PORT=8080 \
     --publish 8080:8080 \
-    klemis-kitchen-api:latest
+    klemis-kitchen-api:latest \
+    --env /etc/klemis-kitchen-api.env
 ```
 
 which will start the API server in the background, listening for and responding to HTTP traffic at `SERVER_PORT` (configured in `.env`). Note that both the mobile app and admin dashboard are packaged and pre-configured to attempt to connect to the API at `https://backend.klemis-kitchen.com`, so DNS will need to be configured to point to the host server.
@@ -106,14 +115,16 @@ docker run --detach \
 
 docker run -d \
     --name klemis-kitchen-api \
-    --env-file ~/dev/klemis-kitchen-api/.env \
+    --mount type=bind,source="$(pwd)"/.env,target=/etc/klemis-kitchen-api.env,readonly \
     --env PORT=8080 \
     --env "VIRTUAL_PORT=8080" \
     # Change both environment parameters here
     # if the server is hosted at a different URL
     --env "VIRTUAL_HOST=backend.klemis-kitchen.com" \
     --env "LETSENCRYPT_HOST=backend.klemis-kitchen.com" \
-    klemis-kitchen-api:latest
+    klemis-kitchen-api:latest \
+    --env /etc/klemis-kitchen-api.env \
+    --log-format json
 ```
 
 ### Troubleshooting
@@ -136,7 +147,7 @@ docker run -d \
 A: The API runs on a Linux machine
 
 **Q: What prerequisites need to be installed?<br>**
-A: Docker needs to be installed
+A: Docker needs to be installed (to build and run as a Docker image). Otherwise, the application can be built using the Go compiler, and it might have various shared library dependencies at runtime.
 
 **Q: How does the API work?<br>**
 A: The API, written in Golang, scrapes data from Klemis kitchen's PoS system through Transact (the online dashboard). Data is stored in MongoDB and S3 (more resource intensive data). Look at our Detailed Design Document for more information.
@@ -152,6 +163,8 @@ A: The way HTTPS is set up doesn't matter for the application; all that matters 
 
 ## ⚙ Configuration
 
+This section describes each environment variable that the API supports. If running on AWS, see `./aws/terraform.tfvars.example` for the configuration file and reference information.
+
 #### API host parameters
 
 ```
@@ -162,61 +175,103 @@ Provide the server domain the API exposes for the application to communicate wit
 
 #### Authentication parameters
 
-```
+```sh
+# Whether the flow continuation cookies used between redirects should be secure (HTTPS-only)
 AUTH_SECURE_CONTINUATION=0
+# List of prefixes to match authentication redirect URIs against (should include the admin dashboard).
+# If empty, then all URIs are allowed.
 AUTH_REDIRECT_URI_PREFIXES=
-AUTH_JWT_SECRET=
+# The (base64-encoded) encryption secret used for signing JWTs (should be between 128 and 512 bits)
+AUTH_JWT_SECRET=secret
+# The number of hours after which to expire JWTs (and require re-authentication). Empty disables expiration
 AUTH_JWT_TOKEN_EXPIRES_AFTER=
-AUTH_BYPASS=0
+# Whether to disable authentication completely. Do not run this in production!
+AUTH_BYPASS=1
 ```
-
-The required authentication credentials for users to utilize the application. Provide a base 64 encoded secret for the `AUTH_JWT_SECRET` field. The `AUTH_JWT_TOKEN_EXPIRES_AFTER` is the number of hours after a token is issued that it expires. If empty, the tokens default to token not expiring.
 
 #### MongoDB connection credentials
 
-```
+```sh
+# The username for a MongoDB Atlas account that can access the API's database instance
 MONGO_DB_USERNAME=
+# The password for a MongoDB Atlas account that can access the API's database instance
 MONGO_DB_PASSWORD=
+# The name of the MongoDB Atlas cluster that the app is running on
 MONGO_DB_CLUSTER_NAME=
+# The name of the MongoDB database (collection of collections) that all of the API's collections should reside in
 MONGO_DB_DATABASE_NAME=
 ```
 
-MongoDB credentials are derived from Mongodb Atlas. The `MONGO_DB_USERNAME` and `MONGO_DB_PASSWORD` are derived after creating an account with MongoDB Atlas, and `MONGO_DB_CLUSTER_NAME` and `MONGO_DB_DATABASE_NAME` are for the cluster on Atlas used to store data.
-
 #### Transact API connection credentials/parameters
 
-```
-TRANSACT_BASE_URL=https://qpc.transactcampus.com
+```sh
+# The base URL of the Transact API to retrieve inventory data from
+TRANSACT_BASE_URL="https://qpc.transactcampus.com"
+# The 'tenant' in Transact to that the API should authenticate against and download inventory for
 TRANSACT_TENANT=gatech
+# The username for a Transact account that can access and execute favorite reports to obtain inventory data
 TRANSACT_USERNAME=
+# The password for a Transact account that can access and execute favorite reports to obtain inventory data
 TRANSACT_PASSWORD=
+# The period to wait between fetches of the current inventory.
+# This affects data liveness served by the API as well as the load induced on Transact
 TRANSACT_FETCH_PERIOD=10m
+# The period to wait between 'reloading' the Transact session (simulating logging out and back in again)
 TRANSACT_RELOAD_SESSION_PERIOD=30m
-TRANSACT_PRODUCT_CLASS_NAME=Klemis Pantry
+# The name of the favorite report created in Transact
+# that should be based on 'Item List with Inventory Details' and output CSV
+TRANSACT_CSV_FAVORITE_REPORT_NAME="Klemis Inventory CSV"
+# The period to wait between seeing if a newly-requested report is ready to download
+TRANSACT_REPORT_POLL_PERIOD=10s
+# The period to wait before giving up on a requested report after which it errors
+TRANSACT_REPORT_POLL_TIMEOUT=5m
+# The 0-based offset for the cell that the product's name exists in,
+# relative to the cell that indicates the profit center
+TRANSACT_CSV_REPORT_ID_COLUMN_OFFSET=9
+# The 0-based offset for the cell that the product's ID exists in,
+# relative to the cell that indicates the profit center
+TRANSACT_CSV_REPORT_NAME_COLUMN_OFFSET=10
+# The 0-based offset for the cell that the product's current quantity exists in,
+# relative to the cell that indicates the profit center
+TRANSACT_CSV_REPORT_QTY_COLUMN_OFFSET=13
+# The prefix that exists in each cell that also contains the profit center.
+# For example, 'Profit Center -' matches cells with the contents:
+# - 'Profit Center - Pantry A'
+#    (which turns into the profit center name 'Pantry A')
+# - 'Profit Centry - Location 002'
+#    (which turns into the profit center name 'Location 002')
+TRANSACT_PROFIT_CENTER_PREFIX="Profit Center -"
+# The expected '__type' field of the report that the scraper searches for.
+# This is an internal value in the Transact API
+TRANSACT_CSV_REPORT_TYPE="qpsview_reports_schedules:#QPWebOffice.Web"
 ```
-
-Transact credentials are defined for Georgia Tech food services credentials. The `TRANSACT_USERNAME` and `TRANSACT_PASSWORD` are provided by STAR services. The `TRANSACT_FETCH_PERIOD` updates the quantity in the database from the live Transact stock every fetch period. `TRANSACT_RELOAD_SESSION_PERIOD` reloads the connection to Transact with provided credentials every session period.
 
 #### CAS login arguments
 
+```sh
+# The base URL (including the trailing '/cas/')
+# for the CAS (single-sign-on) server that is used to authenticate users.
+# The API uses CAS protocol version 2 to implement communication with the SSO provider:
+# https://apereo.github.io/cas/5.1.x/protocol/CAS-Protocol-V2-Specification.html
+CAS_SERVER_URL="https://login.gatech.edu/cas/"
 ```
-CAS_SERVER_URL=https://login.gatech.edu/cas/
-```
-
-`CAS_SERVER_URL` defines the CAS url used for authentication.
 
 #### Upload credentials/parameters
 
-```
+```sh
+# The max size of files that can be uploaded using the API to S3
 UPLOAD_MAX_SIZE=4GB
-UPLOAD_AWS_REGION=us-east-1
+# The AWS region that the bucket should exist in
+UPLOAD_AWS_REGION="us-east-1"
+# The AWS access key ID to use when uploading files to S3
 UPLOAD_AWS_ACCESS_KEY_ID=
+# The AWS secret access key to use when uploading files to S3
 UPLOAD_AWS_SECRET_ACCESS_KEY=
+# The size of chunks to use when uploading files to S3
 UPLOAD_PART_SIZE=6MB
+# The name of the S3 bucket to upload files to
 UPLOAD_S3_BUCKET=klemis-product-images
 ```
-
-The following parameters are essential to S3 data storage, where nutritional facts images and thumbnails are stored. The `UPLOAD_MAX_SIZE` and `UPLOAD_AWS_REGION` define the maximum size and regional configuration for the bucket. `UPLOAD_AWS_ACCESS_KEY_ID` and `UPLOAD_AWS_SECRET_ACCESS_KEY` are AWS credentials unique for each account.
 
 ### 🧪 Testing with health check route
 
