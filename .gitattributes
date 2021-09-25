@@ -1,0 +1,8 @@
+# GitHub Linguist overrides
+# See https://github.com/github/linguist/blob/master/docs/overrides.md
+
+# The following files are example files and should be Terraform files
+# - aws/terraform/backend.tf.example
+# - aws/terraform/terraform.tfvars.example
+aws/terraform/backend.tf.example linguist-language=HCL
+aws/terraform/terraform.tfvars.example linguist-language=HCL

@@ -174,6 +174,7 @@ resource "aws_route53_record" "primary-api-subdomain" {
 
 # Configure the static hosting for the admin dashboard
 # ====================================================
+# Based on https://www.alexhyett.com/terraform-s3-static-website-hosting/
 
 locals {
   admin_dashboard_bucket = "klemis-kitchen-admin--${random_pet.name_suffix.id}"
