@@ -64,13 +64,14 @@ To configure the secrets and other runtime parameters, copy the `terraform/terra
 
 ### 5. Deploying infrastructure
 
-To deploy the infrastructure with Terraform, run the following command from within the `terraform` directory:
+To deploy the infrastructure with Terraform, run the following commands from within the `terraform` directory:
 
 ```sh
+terraform init
 terraform apply
 ```
 
-The command will give a preview of changes and will require an explicit "yes" to be typed in.
+The `apply` command will give a preview of changes and will require an explicit "yes" to be typed in.
 
 ### 6. Creating the code bundle
 
@@ -109,7 +110,7 @@ To deploy the admin dashboard to S3, I recommend cloning the repository ([jd-116
 Whenever you make changes to the files in your S3 bucket you need to invalidate the Cloudfront cache:
 
 ```
-aws cloudfront create-invalidation --distribution-id <DISTRIBUTION_ID> --paths "/*";
+aws cloudfront create-invalidation --distribution-id <DISTRIBUTION_ID> --paths "/*"
 ```
 
 Replace `<DISTRIBUTION_ID>` with the appropriate ID of the distribution for the admin dashboard. This can be found on the CloudFront web console (pay attention to the "alternate domain name(s)").

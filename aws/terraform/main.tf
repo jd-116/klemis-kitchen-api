@@ -61,6 +61,15 @@ locals {
   }
 }
 
+data "aws_elastic_beanstalk_solution_stack" "go" {
+  most_recent = true
+
+  # Selects the latest Go solution stack running on Amazon Linux 2.
+  # Update this regex if needed.
+  # See https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/concepts.platforms.html
+  name_regex = "^64bit Amazon Linux 2 v[0-9.]+ running Go 1$"
+}
+
 resource "aws_elastic_beanstalk_application" "application" {
   name = var.application_name
 }
@@ -68,13 +77,13 @@ resource "aws_elastic_beanstalk_application" "application" {
 resource "aws_elastic_beanstalk_environment" "environment" {
   name                = var.environment_name
   application         = aws_elastic_beanstalk_application.application.name
-  solution_stack_name = "64bit Amazon Linux 2 v3.4.0 running Go 1"
+  solution_stack_name = data.aws_elastic_beanstalk_solution_stack.go.name
 
   # Elastic Beanstalk configuration options:
   setting {
     namespace = "aws:autoscaling:launchconfiguration"
     name      = "IamInstanceProfile"
-    value     = "aws-elasticbeanstalk-ec2-role"
+    value     = aws_iam_instance_profile.elastic_beanstalk.name
   }
 
   setting {
@@ -100,6 +109,38 @@ resource "aws_elastic_beanstalk_environment" "environment" {
   }
 }
 
+resource "aws_iam_instance_profile" "elastic_beanstalk" {
+  name = var.application_name
+  role = aws_iam_role.elastic_beanstalk.name
+}
+
+resource "aws_iam_role" "elastic_beanstalk" {
+  name = "${var.application_name}-ec2-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = ""
+        Effect = "Allow"
+        Action = "sts:AssumeRole"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      },
+    ]
+  })
+}
+
+data "aws_iam_policy" "AWSElasticBeanstalkWebTier" {
+  # See https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/iam-instanceprofile.html
+  arn = "arn:aws:iam::aws:policy/AWSElasticBeanstalkWebTier"
+}
+
+resource "aws_iam_role_policy_attachment" "elastic_beanstalk_web" {
+  role       = aws_iam_role.elastic_beanstalk.name
+  policy_arn = data.aws_iam_policy.AWSElasticBeanstalkWebTier.arn
+}
+
 # Create the IAM user & bucket for uploading images to S3
 # =======================================================
 
@@ -118,11 +159,11 @@ resource "aws_s3_bucket" "upload" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid         = "PublicReadGetObject"
-        "Effect"    = "Allow"
-        "Principal" = "*"
-        "Action"    = "s3:GetObject"
-        "Resource"  = "arn:aws:s3:::${local.upload_bucket}/*"
+        Sid       = "PublicReadGetObject"
+        Effect    = "Allow"
+        Principal = "*"
+        Action    = "s3:GetObject"
+        Resource  = "arn:aws:s3:::${local.upload_bucket}/*"
       },
     ]
   })
@@ -187,11 +228,11 @@ resource "aws_s3_bucket" "admin_dashboard" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid         = "PublicReadGetObject"
-        "Effect"    = "Allow"
-        "Principal" = "*"
-        "Action"    = "s3:GetObject"
-        "Resource"  = "arn:aws:s3:::${local.admin_dashboard_bucket}/*"
+        Sid       = "PublicReadGetObject"
+        Effect    = "Allow"
+        Principal = "*"
+        Action    = "s3:GetObject"
+        Resource  = "arn:aws:s3:::${local.admin_dashboard_bucket}/*"
       },
     ]
   })
@@ -289,11 +330,11 @@ resource "aws_s3_bucket" "apex_redirect" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid         = "PublicReadGetObject"
-        "Effect"    = "Allow"
-        "Principal" = "*"
-        "Action"    = "s3:GetObject"
-        "Resource"  = "arn:aws:s3:::${local.apex_bucket}/*"
+        Sid       = "PublicReadGetObject"
+        Effect    = "Allow"
+        Principal = "*"
+        Action    = "s3:GetObject"
+        Resource  = "arn:aws:s3:::${local.apex_bucket}/*"
       },
     ]
   })
@@ -326,7 +367,7 @@ resource "aws_cloudfront_distribution" "apex_redirect" {
     target_origin_id = "S3-www.${local.apex_bucket}"
 
     forwarded_values {
-      headers = ["Origin"]
+      headers      = ["Origin"]
       query_string = true
 
       cookies {

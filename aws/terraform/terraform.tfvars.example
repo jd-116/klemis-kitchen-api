@@ -14,7 +14,7 @@ application_name = "klemis-kitchen-api"
 environment_name = "klemiskitchenapi-env"
 # The EC2 instance type to host the API on
 # https://aws.amazon.com/ec2/instance-types/
-instance_type = "t3a.micro"
+instance_type = "t3a.nano"
 
 # Website parameters
 # ==================
@@ -90,7 +90,7 @@ transact_csv_report_qty_column_offset = "13"
 #    (which turns into the profit center name 'Pantry A')
 # - 'Profit Centry - Location 002'
 #    (which turns into the profit center name 'Location 002')
-transact_profit_center_prefix = "Profit Center - "
+transact_profit_center_prefix = "Profit Center -"
 # The expected '__type' field of the report that the scraper searches for.
 # This is an internal value in the Transact API
 transact_csv_report_type = "qpsview_reports_schedules:#QPWebOffice.Web"
