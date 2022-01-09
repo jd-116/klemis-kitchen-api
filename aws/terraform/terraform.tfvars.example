@@ -24,8 +24,6 @@ root_domain = "klemis-kitchen.com"
 api_subdomain = "api"
 # The sub-domain that the admin dashboard will be hosted at. This shouldn't include the root domain
 admin_subdomain = "admin"
-# The URL that the site will redirect to when accessed at the apex domain
-apex_redirect_url = "https://studentlife.gatech.edu/content/star-services"
 # The port that the API server listens on and the port that the internal nginx proxy server directs traffic to
 api_internal_port = 5000
 

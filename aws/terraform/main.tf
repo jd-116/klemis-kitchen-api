@@ -28,7 +28,6 @@ locals {
   api_environment_variables = {
     PORT                                   = tostring(var.api_internal_port)
     API_SERVER_DOMAIN                      = "${var.api_subdomain}.${var.root_domain}"
-    AUTH_SECURE_CONTINUATION               = var.auth_secure_continuation
     AUTH_JWT_SECRET                        = var.auth_jwt_secret
     AUTH_JWT_TOKEN_EXPIRES_AFTER           = var.auth_jwt_token_expires_after
     AUTH_SECURE_CONTINUATION               = var.auth_secure_continuation ? "1" : "0"
@@ -315,16 +314,16 @@ resource "aws_route53_record" "admin_dashboard" {
   }
 }
 
-# Configure the apex domain to redirect to another site
-# (since there is otherwise no content at the apex).
-# =====================================================
+# Configure the static hosting for the user app
+# ====================================================
+# Based on https://www.alexhyett.com/terraform-s3-static-website-hosting/
 
 locals {
-  apex_bucket = "klemis-kitchen-apex--${random_pet.name_suffix.id}"
+  app_bucket = "klemis-kitchen-app--${random_pet.name_suffix.id}"
 }
 
-resource "aws_s3_bucket" "apex_redirect" {
-  bucket = local.apex_bucket
+resource "aws_s3_bucket" "app" {
+  bucket = local.app_bucket
   acl    = "public-read"
   policy = jsonencode({
     Version = "2012-10-17"
@@ -334,20 +333,28 @@ resource "aws_s3_bucket" "apex_redirect" {
         Effect    = "Allow"
         Principal = "*"
         Action    = "s3:GetObject"
-        Resource  = "arn:aws:s3:::${local.apex_bucket}/*"
+        Resource  = "arn:aws:s3:::${local.app_bucket}/*"
       },
     ]
   })
 
+  cors_rule {
+    allowed_headers = ["Authorization", "Content-Length"]
+    allowed_methods = ["GET", "POST"]
+    allowed_origins = ["https://${var.root_domain}"]
+    max_age_seconds = 3000
+  }
+
   website {
-    redirect_all_requests_to = var.apex_redirect_url
+    index_document = "index.html"
   }
 }
 
-resource "aws_cloudfront_distribution" "apex_redirect" {
+resource "aws_cloudfront_distribution" "app" {
   origin {
-    domain_name = aws_s3_bucket.apex_redirect.website_endpoint
-    origin_id   = "S3-www.${local.apex_bucket}"
+    domain_name = aws_s3_bucket.app.website_endpoint
+    origin_id   = "S3-www.${local.app_bucket}"
+
     custom_origin_config {
       http_port              = 80
       https_port             = 443
@@ -356,18 +363,20 @@ resource "aws_cloudfront_distribution" "apex_redirect" {
     }
   }
 
-  enabled         = true
-  is_ipv6_enabled = true
+  enabled             = true
+  is_ipv6_enabled     = true
+  default_root_object = "index.html"
 
   aliases = [var.root_domain]
 
   default_cache_behavior {
     allowed_methods  = ["GET", "HEAD"]
     cached_methods   = ["GET", "HEAD"]
-    target_origin_id = "S3-www.${local.apex_bucket}"
+    target_origin_id = "S3-www.${local.app_bucket}"
 
     forwarded_values {
-      headers      = ["Origin"]
+      headers = ["Origin"]
+      # Authentication relies on the query string
       query_string = true
 
       cookies {
@@ -375,10 +384,11 @@ resource "aws_cloudfront_distribution" "apex_redirect" {
       }
     }
 
-    viewer_protocol_policy = "allow-all"
-    min_ttl                = 0
-    default_ttl            = 86400
+    viewer_protocol_policy = "redirect-to-https"
+    min_ttl                = 31536000
+    default_ttl            = 31536000
     max_ttl                = 31536000
+    compress               = true
   }
 
   restrictions {
@@ -394,14 +404,14 @@ resource "aws_cloudfront_distribution" "apex_redirect" {
   }
 }
 
-resource "aws_route53_record" "apex_redirect" {
+resource "aws_route53_record" "app" {
   zone_id = data.aws_route53_zone.primary.zone_id
   name    = var.root_domain
   type    = "A"
 
   alias {
-    name                   = aws_cloudfront_distribution.apex_redirect.domain_name
-    zone_id                = aws_cloudfront_distribution.apex_redirect.hosted_zone_id
+    name                   = aws_cloudfront_distribution.app.domain_name
+    zone_id                = aws_cloudfront_distribution.app.hosted_zone_id
     evaluate_target_health = false
   }
 }

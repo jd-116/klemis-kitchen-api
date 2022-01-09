@@ -105,12 +105,26 @@ To deploy the admin dashboard to S3, I recommend cloning the repository ([jd-116
 1. Install the [AWS CLI](https://aws.amazon.com/cli/) and configure it to use your user (or some user that can upload files to the admin dashboard S3 bucket)
 1. Run `aws s3 sync ./build s3://<BUCKET_NAME>` in the root of the admin dashboard repository, replacing `<BUCKET_NAME>` with the name of the bucket created for the admin dashboard static files (should start with `klemis-kitchen-admin--` and then end with a random "pet name"; if you're unsure of what it is called, you can log into the S3 web console and look at all of the buckets there)
 
-### 10. Invalidating the CloudFront cache
+### 10. Building the web app
 
-Whenever you make changes to the files in your S3 bucket you need to invalidate the Cloudfront cache:
+To deploy the student-facing inventory web app, I recommend cloning the repository ([jd-116/klemis-kitchen-app](https://github.com/jd-116/klemis-kitchen-app)) locally and then building/uploading it from there.
+
+1. First, make sure you have [Node.js](https://nodejs.org/en/) and [Yarn version 1](https://classic.yarnpkg.com/lang/en/docs/install/) installed
+1. Clone the repository ([jd-116/klemis-kitchen-app](https://github.com/jd-116/klemis-kitchen-app)) to a location on your computer
+1. Run `yarn install` in the root of the app repository
+1. Run `yarn build:web` in the root of the app repository
+
+### 11. Deploying the web app
+
+1. Install the [AWS CLI](https://aws.amazon.com/cli/) and configure it to use your user (or some user that can upload files to the app S3 bucket)
+1. Run `aws s3 sync ./web-build s3://<BUCKET_NAME>` in the root of the app repository, replacing `<BUCKET_NAME>` with the name of the bucket created for the app static files (should start with `klemis-kitchen-app--` and then end with a random "pet name"; if you're unsure of what it is called, you can log into the S3 web console and look at all of the buckets there)
+
+### 12. Invalidating the CloudFront cache
+
+Whenever you make changes to the files in either the admin dashboard or app S3 bucket, you need to invalidate the Cloudfront cache:
 
 ```
 aws cloudfront create-invalidation --distribution-id <DISTRIBUTION_ID> --paths "/*"
 ```
 
-Replace `<DISTRIBUTION_ID>` with the appropriate ID of the distribution for the admin dashboard. This can be found on the CloudFront web console (pay attention to the "alternate domain name(s)").
+Replace `<DISTRIBUTION_ID>` with the appropriate ID of the distribution for the either the admin dashboard or app. This can be found on the CloudFront web console (pay attention to the "alternate domain name(s)").

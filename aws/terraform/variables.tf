@@ -43,11 +43,6 @@ variable "admin_subdomain" {
   description = "The sub-domain that the admin dashboard will be hosted at. This shouldn't include the root domain"
 }
 
-variable "apex_redirect_url" {
-  type        = string
-  description = "The URL that the site will redirect to when accessed at the apex domain"
-}
-
 variable "api_internal_port" {
   type        = number
   description = "The port that the API server listens on and the port that the internal nginx proxy server directs traffic to"
