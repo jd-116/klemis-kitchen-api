@@ -49,7 +49,7 @@ func NewAPIServer(logger zerolog.Logger) (*APIServer, error) {
 	}
 
 	// Initialize the MongoDB handler
-	dbProvider, err := mongo.NewProvider()
+	dbProvider, err := mongo.NewProvider(logger)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not initialize MongoDB handler")
 	}
@@ -67,7 +67,7 @@ func NewAPIServer(logger zerolog.Logger) (*APIServer, error) {
 	}
 
 	// Initialize the S3 handler
-	uploadProvider, err := s3.NewProvider()
+	uploadProvider, err := s3.NewProvider(logger)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not initialize S3 handler")
 	}

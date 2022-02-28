@@ -3,6 +3,7 @@ package transact
 import (
 	"bytes"
 	"encoding/csv"
+	"encoding/gob"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -136,6 +137,9 @@ func (s *Scraper) GetInventoryCSV(csvReportName string, pollPeriod time.Duration
 
 	// Now, submit the request to generate the report
 	reportFileName, err := s.submitAndWait(matchedReport, reportType, pollPeriod, pollTimeout)
+	if err != nil {
+		return nil, err
+	}
 
 	// Download the report
 	reportContents, err := s.downloadReport(reportFileName)
@@ -198,7 +202,7 @@ func (s *Scraper) submitAndWait(report map[string]interface{}, reportType string
 	}
 	reportID := int(reportIDFloat)
 
-	err := s.submitReport(report, reportType)
+	err := s.submitReport(report, reportType, reportID, reportName)
 	if err != nil {
 		return "", err
 	}
@@ -352,12 +356,12 @@ func (s *Scraper) isReportReady(reportID int, reportName string) (*string, error
 			Str("report_url", *result.Result.File).
 			Int("report_id", reportID).
 			Str("report_name", reportName).
-			Msg("Transact report was ready")
+			Msg("report was ready")
 
 		return result.Result.File, nil
 	}
 
-	s.logger.Info().Msg("Transact report was not ready")
+	s.logger.Info().Msg("report was not ready")
 
 	// Report isn't ready yet, but no error
 	return nil, nil
@@ -425,27 +429,48 @@ type submitReportOriginalEntity struct {
 	Type string `json:"__type"`
 }
 
+func deepCopyMap(m map[string]interface{}) (map[string]interface{}, error) {
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	dec := gob.NewDecoder(&buf)
+	err := enc.Encode(m)
+	if err != nil {
+		return nil, err
+	}
+	var copy map[string]interface{}
+	err = dec.Decode(&copy)
+	if err != nil {
+		return nil, err
+	}
+	return copy, nil
+}
+
 // submitReport sends the given report definition to the API
 // and requests it be generated.
 // Note: s.Mutex should be locked before calling this function
 func (s *Scraper) submitReport(reportDefinition map[string]interface{},
-	reportType string) error {
-
-	reportName := "unknown"
-	if name, ok := reportDefinition["name"]; ok {
-		if nameStr, ok := name.(string); ok {
-			reportName = nameStr
-		}
-	}
+	reportType string, reportID int, reportName string) error {
 
 	// Create the submit report body JSON
-	reportDefinition["__type"] = reportType
+	reportDefinitionCopy, err := deepCopyMap(reportDefinition)
+	if err != nil {
+		return fmt.Errorf("failed to deep copy report definition: %w", err)
+	}
+	reportDefinitionCopy["__type"] = reportType
+	reportDefinitionCopy["last_filename"] = ""
+	reportDefinitionCopy["last_run"] = nil
+	reportDefinitionCopy["subject"] = ""
+	reportDefinitionCopy["enabled"] = true
+	// I'm not sure if this is neccessary,
+	// but it's done in the actual requests in QuadPoint POS.
+	reportDefinitionCopy["all_fields"] = fmt.Sprintf("%s %s %s", reportName, reportDefinitionCopy["report_name"], s.username)
+	delete(reportDefinitionCopy, "queue_time")
 	body := submitReportBody{
 		// These values come from observing the requests in devtools
 		ChangeSet: []submitReportChange{{
 			ID:        0,
 			Operation: 3,
-			Entity:    reportDefinition,
+			Entity:    reportDefinitionCopy,
 			OriginalEntity: submitReportOriginalEntity{
 				Type: reportType,
 			},
@@ -464,6 +489,7 @@ func (s *Scraper) submitReport(reportDefinition map[string]interface{},
 		Str("url", url).
 		Str("method", method).
 		Str("report_name", reportName).
+		Int("report_id", reportID).
 		Str("report_type", reportType).
 		Msg("requesting report to be generated")
 
@@ -484,6 +510,35 @@ func (s *Scraper) submitReport(reportDefinition map[string]interface{},
 
 	if res.StatusCode != 200 {
 		return fmt.Errorf("report submission for report '%s' failed", reportName)
+	}
+
+	url = fmt.Sprintf("%s/api/v2/tenants/%s/reportjobs/%d/finalize", s.baseURL, s.tenant, reportID)
+	method = "POST"
+
+	s.logger.
+		Info().
+		Str("url", url).
+		Str("method", method).
+		Str("report_name", reportName).
+		Int("report_id", reportID).
+		Str("report_type", reportType).
+		Msg("finalizing report request")
+
+	req, err = http.NewRequest(method, url, nil)
+	if err != nil {
+		return err
+	}
+
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", s.authToken))
+
+	res, err = s.client.Do(req)
+	if err != nil {
+		return err
+	}
+	res.Body.Close()
+
+	if res.StatusCode != 200 {
+		return fmt.Errorf("report request finalization for report '%s' failed", reportName)
 	}
 
 	s.logger.
@@ -559,21 +614,31 @@ func (s *Scraper) getClientVersion() (string, error) {
 	defer res.Body.Close()
 
 	doc, err := htmlquery.Parse(res.Body)
+	if err != nil {
+		return "", fmt.Errorf("error parsing HTML response: %w", err)
+	}
 	title, err := htmlquery.Query(doc, "//title")
 	if err != nil {
-		return "", err
-	}
-
-	// Extract the client version from the node
-	text := &bytes.Buffer{}
-	collectText(title, text)
-	titleStr := text.String()
-	if !strings.HasPrefix(titleStr, "QuadPoint Cloud ") {
-		return "", fmt.Errorf("malformed page title '%s'; expecting 'QuadPoint Cloud X.X.X.X'", titleStr)
+		return "", fmt.Errorf("error querying HTML response for title tag: %w", err)
 	}
 
 	// Extract the version from the page title string
-	version := strings.TrimPrefix(titleStr, "QuadPoint Cloud ")
+	text := &bytes.Buffer{}
+	collectText(title, text)
+	titleStr := text.String()
+	expectedTitlePrefixes := []string{"QuadPoint Cloud ", "Transact Cloud POS "}
+	var version string
+	parsed := false
+	for _, prefix := range expectedTitlePrefixes {
+		if strings.HasPrefix(titleStr, prefix) {
+			version = strings.TrimPrefix(titleStr, prefix)
+			parsed = true
+			break
+		}
+	}
+	if !parsed {
+		return "", fmt.Errorf("malformed page title '%s'; expecting one of prefixes [%s]", titleStr, strings.Join(expectedTitlePrefixes, "', '"))
+	}
 
 	s.logger.
 		Info().

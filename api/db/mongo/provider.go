@@ -3,7 +3,6 @@ package mongo
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -14,6 +13,7 @@ import (
 	"github.com/jd-116/klemis-kitchen-api/db"
 	"github.com/jd-116/klemis-kitchen-api/env"
 	"github.com/jd-116/klemis-kitchen-api/types"
+	"github.com/rs/zerolog"
 )
 
 const (
@@ -22,13 +22,15 @@ const (
 
 // Provider implements the Provider interface for a MongoDB connection
 type Provider struct {
+	logger        zerolog.Logger
 	connectionURI string
 	databaseName  string
+	clusterName   string
 	client        *mongo.Client
 }
 
 // NewProvider creates a new provider and loads values in from the environment
-func NewProvider() (*Provider, error) {
+func NewProvider(logger zerolog.Logger) (*Provider, error) {
 	username, err := env.GetEnv("MongoDB username", "MONGO_DB_USERNAME")
 	if err != nil {
 		return nil, err
@@ -52,8 +54,10 @@ func NewProvider() (*Provider, error) {
 	connectionURI := fmt.Sprintf("mongodb+srv://%s:%s@%s.qkdgq.mongodb.net/%s?retryWrites=true&w=majority",
 		username, password, clusterName, databaseName)
 	return &Provider{
+		logger:        logger,
 		connectionURI: connectionURI,
 		databaseName:  databaseName,
+		clusterName:   clusterName,
 		client:        nil,
 	}, nil
 }
@@ -96,7 +100,11 @@ func (p *Provider) Disconnect(ctx context.Context) error {
 // Create anything needed for the database,
 // like indices
 func (p *Provider) initialize(ctx context.Context) error {
-	log.Println("initializing the MongoDB database")
+	p.logger.
+		Info().
+		Str("database_name", p.databaseName).
+		Str("cluster_name", p.clusterName).
+		Msg("initializing the MongoDB database")
 
 	_, err := p.announcements().Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys:    bson.M{"id": 1},
